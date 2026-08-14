@@ -1,0 +1,14 @@
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-quant_lab}
+      POSTGRES_USER: ${POSTGRES_USER:-quant_lab}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-quant_lab_dev}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
