@@ -7,6 +7,7 @@ WORKDIR /workspace
 
 COPY pyproject.toml README.md ./
 COPY quant ./quant
+COPY infra ./infra
 
 RUN python -m pip install --no-cache-dir --upgrade pip \
     && python -m pip install --no-cache-dir -e ".[dev]"

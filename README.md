@@ -39,7 +39,18 @@ Start or stop PostgreSQL:
 
 ```bash
 docker compose up -d postgres
+alembic upgrade head
 docker compose down
 ```
 
 PostgreSQL data is retained in the named Docker volume `postgres_data`.
+
+Run PostgreSQL integration tests after starting the service and applying the
+migration:
+
+```bash
+pytest -m integration
+```
+
+All tests, including fast domain tests, can be run with `pytest`. If PostgreSQL
+is unavailable, integration tests are skipped while unit tests still run.

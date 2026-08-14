@@ -1,0 +1,34 @@
+from collections.abc import Sequence
+from typing import Protocol
+from uuid import UUID
+
+from quant.domain import (
+    Experiment,
+    ExperimentRun,
+    PromotionDecision,
+    ValidationRun,
+)
+
+
+class ExperimentRepository(Protocol):
+    def add(self, experiment: Experiment) -> None: ...
+
+    def get(self, experiment_id: UUID) -> Experiment | None: ...
+
+    def add_run(self, run: ExperimentRun) -> None: ...
+
+    def get_run(self, run_id: UUID) -> ExperimentRun | None: ...
+
+    def list_runs(self, experiment_id: UUID) -> Sequence[ExperimentRun]: ...
+
+    def add_validation(self, validation: ValidationRun) -> None: ...
+
+    def get_validation(self, validation_id: UUID) -> ValidationRun | None: ...
+
+    def list_validations(self, run_id: UUID) -> Sequence[ValidationRun]: ...
+
+    def add_promotion_decision(self, decision: PromotionDecision) -> None: ...
+
+    def list_promotion_decisions(
+        self, experiment_id: UUID
+    ) -> Sequence[PromotionDecision]: ...
