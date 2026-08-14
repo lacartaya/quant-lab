@@ -66,5 +66,14 @@ pytest tests/unit/market_data
 The tiny CSV fixture under `tests/fixtures/market_data/` demonstrates deterministic
 CSV normalization and snapshot ingestion; it is test data, not a research sample.
 
+## Baseline strategy
+
+Moving Average Trend Following is currently a reference implementation used to
+validate the platform architecture. It consumes normalized historical datasets
+and emits deterministic `LONG` or `FLAT` state signals after its warm-up period.
+
+The default 50/200 configuration is a non-optimized demonstration. It is not
+presented as a validated trading edge and makes no performance claim.
+
 All tests, including fast domain tests, can be run with `pytest`. If PostgreSQL
 is unavailable, integration tests are skipped while unit tests still run.

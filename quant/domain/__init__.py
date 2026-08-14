@@ -10,6 +10,7 @@ from quant.domain.experiment import (
 from quant.domain.hypothesis import Hypothesis, HypothesisStatus
 from quant.domain.market_data import HistoricalDataRequest, HistoricalDataset, MarketBar
 from quant.domain.promotion import PromotionDecision, PromotionDecisionType
+from quant.domain.signal import Signal, SignalAction
 from quant.domain.strategy import Strategy, StrategyVersion
 from quant.domain.validation import (
     MetricSet,
@@ -33,6 +34,8 @@ __all__ = [
     "MetricSet",
     "PromotionDecision",
     "PromotionDecisionType",
+    "Signal",
+    "SignalAction",
     "Strategy",
     "StrategyVersion",
     "ValidationRun",
