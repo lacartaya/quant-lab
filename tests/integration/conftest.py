@@ -15,7 +15,6 @@ def postgres_session() -> Iterator[Session]:
     except OperationalError as error:
         engine.dispose()
         pytest.skip(f"PostgreSQL is not available: {error}")
-
     transaction = connection.begin()
     session = Session(bind=connection, expire_on_commit=False)
     try:

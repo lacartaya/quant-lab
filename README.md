@@ -27,6 +27,11 @@ Copy the example environment configuration when local services need it:
 cp .env.example .env
 ```
 
+`DATASET_STORAGE_PATH` selects the local root for immutable Parquet snapshots and
+defaults to `./data/snapshots`. PostgreSQL stores snapshot metadata; each snapshot
+stores normalized UTC OHLCV bars in `<dataset-id>/bars.parquet` and records a
+canonical SHA-256 content checksum.
+
 Run the quality checks:
 
 ```bash
@@ -51,6 +56,15 @@ migration:
 ```bash
 pytest -m integration
 ```
+
+Run only the database-independent market-data tests with:
+
+```bash
+pytest tests/unit/market_data
+```
+
+The tiny CSV fixture under `tests/fixtures/market_data/` demonstrates deterministic
+CSV normalization and snapshot ingestion; it is test data, not a research sample.
 
 All tests, including fast domain tests, can be run with `pytest`. If PostgreSQL
 is unavailable, integration tests are skipped while unit tests still run.

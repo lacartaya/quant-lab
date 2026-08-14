@@ -9,6 +9,7 @@ from infra.persistence.models import (
     ValidationRunModel,
 )
 from quant.domain import (
+    AdjustmentPolicy,
     DatasetSnapshot,
     Experiment,
     ExperimentRun,
@@ -118,6 +119,8 @@ def dataset_to_model(value: DatasetSnapshot) -> DatasetSnapshotModel:
         end_at=value.end_at,
         version=value.version,
         checksum=value.checksum,
+        storage_location=value.storage_location,
+        adjustment_policy=value.adjustment_policy.value,
         created_at=value.created_at,
     )
 
@@ -133,6 +136,8 @@ def dataset_from_model(value: DatasetSnapshotModel) -> DatasetSnapshot:
         end_at=value.end_at,
         version=value.version,
         checksum=value.checksum,
+        storage_location=value.storage_location,
+        adjustment_policy=AdjustmentPolicy(value.adjustment_policy),
         created_at=value.created_at,
     )
 

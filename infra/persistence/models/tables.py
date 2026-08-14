@@ -77,6 +77,10 @@ class DatasetSnapshotModel(Base):
     __tablename__ = "dataset_snapshots"
     __table_args__ = (
         CheckConstraint("end_at > start_at", name="ck_dataset_snapshot_range"),
+        CheckConstraint(
+            "adjustment_policy IN ('raw', 'adjusted')",
+            name="ck_dataset_snapshots_adjustment_policy",
+        ),
         UniqueConstraint(
             "provider",
             "market",
@@ -99,6 +103,8 @@ class DatasetSnapshotModel(Base):
     end_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     version: Mapped[str] = mapped_column(String(100))
     checksum: Mapped[str] = mapped_column(String(255))
+    storage_location: Mapped[str] = mapped_column(Text)
+    adjustment_policy: Mapped[str] = mapped_column(String(16))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 

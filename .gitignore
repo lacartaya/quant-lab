@@ -15,6 +15,9 @@ venv/
 # Local configuration
 .env
 
+# Generated market-data snapshots
+data/snapshots/
+
 # Editors and operating systems
 .idea/
 .vscode/

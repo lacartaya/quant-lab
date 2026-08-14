@@ -12,6 +12,7 @@ from infra.persistence.repositories import (
 )
 from quant.application import RegisterExperiment
 from quant.domain import (
+    AdjustmentPolicy,
     DatasetSnapshot,
     Experiment,
     ExperimentRun,
@@ -116,6 +117,8 @@ def test_complete_research_lineage_round_trip(postgres_session: Session) -> None
         NOW,
         "2026-08",
         "sha256:dataset",
+        f"{uuid4()}/bars.parquet",
+        AdjustmentPolicy.RAW,
         NOW,
     )
     datasets.add(snapshot)

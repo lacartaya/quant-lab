@@ -4,7 +4,7 @@ from uuid import uuid4
 
 import pytest
 
-from quant.domain import DatasetSnapshot
+from quant.domain import AdjustmentPolicy, DatasetSnapshot
 
 START = datetime(2025, 1, 1, tzinfo=UTC)
 
@@ -20,6 +20,8 @@ def make_snapshot(*, end_at: datetime) -> DatasetSnapshot:
         end_at,
         "2025-01",
         "sha256:abc",
+        "snapshot/bars.parquet",
+        AdjustmentPolicy.RAW,
         datetime(2026, 1, 1, tzinfo=UTC),
     )
 
