@@ -29,6 +29,12 @@ class BacktestResult:
 
 
 @dataclass(frozen=True, slots=True)
+class _PendingTransition:
+    signal: Signal
+    remaining_delay_bars: int
+
+
+@dataclass(frozen=True, slots=True)
 class BacktestEngine:
     """Deterministic single-asset LONG/FLAT event-driven simulator."""
 
@@ -39,7 +45,14 @@ class BacktestEngine:
         configuration: BacktestConfiguration,
         *,
         evaluation_start: datetime | None = None,
+        execution_delay_bars: int = 0,
     ) -> BacktestResult:
+        if (
+            not isinstance(execution_delay_bars, int)
+            or isinstance(execution_delay_bars, bool)
+            or execution_delay_bars < 0
+        ):
+            raise ValueError("execution_delay_bars must be a non-negative integer")
         if evaluation_start is not None:
             if evaluation_start.tzinfo is None or evaluation_start.utcoffset() is None:
                 raise ValueError("evaluation_start must be timezone-aware")
@@ -55,32 +68,37 @@ class BacktestEngine:
         trades: list[Trade] = []
         equity_curve: list[EquityPoint] = []
         skipped_signals: list[Signal] = []
-        pending: Signal | None = None
+        pending: _PendingTransition | None = None
 
         for index, bar in enumerate(dataset.bars):
             in_evaluation = (
                 evaluation_start is None or bar.timestamp >= evaluation_start
             )
             if in_evaluation and pending is not None:
-                order = self._create_order(
-                    pending,
-                    bar.timestamp,
-                    bar.open,
-                    portfolio,
-                    configuration,
-                    len(orders) + 1,
-                )
-                if order is None:
-                    skipped_signals.append(pending)
+                if pending.remaining_delay_bars > 0:
+                    pending = _PendingTransition(
+                        pending.signal, pending.remaining_delay_bars - 1
+                    )
                 else:
-                    fill = execution.execute(order)
-                    orders.append(order)
-                    fills.append(fill)
-                    if fill.side is OrderSide.BUY:
-                        portfolio.apply_buy(fill)
+                    order = self._create_order(
+                        pending.signal,
+                        bar.timestamp,
+                        bar.open,
+                        portfolio,
+                        configuration,
+                        len(orders) + 1,
+                    )
+                    if order is None:
+                        skipped_signals.append(pending.signal)
                     else:
-                        trades.append(portfolio.apply_sell(fill))
-                pending = None
+                        fill = execution.execute(order)
+                        orders.append(order)
+                        fills.append(fill)
+                        if fill.side is OrderSide.BUY:
+                            portfolio.apply_buy(fill)
+                        else:
+                            trades.append(portfolio.apply_sell(fill))
+                    pending = None
 
             if in_evaluation:
                 equity_curve.append(portfolio.mark(bar.timestamp, bar.close))
@@ -98,8 +116,14 @@ class BacktestEngine:
                     signals.append(current_signal)
                 desired_long = current_signal.action is SignalAction.LONG
                 if desired_long != portfolio.is_long:
-                    pending = current_signal
-                elif not in_evaluation:
+                    if (
+                        pending is None
+                        or pending.signal.action is not current_signal.action
+                    ):
+                        pending = _PendingTransition(
+                            current_signal, execution_delay_bars
+                        )
+                else:
                     pending = None
 
         final_point = equity_curve[-1]
@@ -115,7 +139,7 @@ class BacktestEngine:
             equity_curve=tuple(equity_curve),
             open_position=portfolio.position(dataset.bars[-1].close),
             skipped_signals=tuple(skipped_signals),
-            unexecuted_signals=(pending,) if pending is not None else (),
+            unexecuted_signals=(pending.signal,) if pending is not None else (),
         )
 
     @staticmethod

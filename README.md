@@ -139,5 +139,17 @@ does not select or adopt the historically best combination. The currently
 supported `FULL_HISTORY_RESEARCH` scope is explicitly research-contaminated for
 future OOS interpretation.
 
+## Stress testing
+
+Parameter sensitivity asks what happens when strategy parameters change. Stress
+testing asks what happens when execution conditions and assumptions become worse.
+Quant Lab supports explicit fee and slippage multipliers, adverse fills, fixed
+additional execution delay, and controlled transient parameter perturbations.
+
+Every scenario is deterministic, retains the original dataset and baseline
+lineage, and is persisted independently. Survival under stress is evidence of
+historical robustness—not proof of future profitability—and stress validation
+does not automatically promote or reject a strategy.
+
 All tests, including fast domain tests, can be run with `pytest`. If PostgreSQL
 is unavailable, integration tests are skipped while unit tests still run.

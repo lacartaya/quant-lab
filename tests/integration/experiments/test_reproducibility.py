@@ -18,9 +18,11 @@ from quant.application import DatasetIntegrityError, LoadDatasetSnapshot
 from quant.application.experiments import (
     ReproduceExperiment,
     ReproduceParameterSensitivityValidation,
+    ReproduceStressValidation,
     ReproduceWalkForwardValidation,
     RunExperiment,
     RunParameterSensitivityValidation,
+    RunStressValidation,
     RunWalkForwardValidation,
 )
 from quant.application.experiments.evidence import canonical_value
@@ -46,6 +48,9 @@ from quant.domain import (
 from quant.validation import (
     ParameterSensitivityConfiguration,
     ParameterSpaceTooLarge,
+    StressScenario,
+    StressTestingConfiguration,
+    StressType,
     WalkForwardConfiguration,
     WalkForwardMode,
 )
@@ -408,3 +413,111 @@ def test_parameter_sensitivity_preserves_strategy_and_reproduces_after_restart(
     assert isinstance(evaluation, dict)
     assert evaluation["scope"] == "full_history_research"
     assert evaluation["contaminates_future_oos_interpretation"] is True
+
+
+def test_stress_suite_is_cost_monotonic_and_reproduces_after_restart(
+    postgres_session: Session, tmp_path: Path
+) -> None:
+    experiment = _persist_lineage(postgres_session, tmp_path)
+    runner, _ = _services(postgres_session, tmp_path)
+    execution = runner.execute(
+        experiment.id,
+        BacktestConfiguration(
+            Decimal("100"),
+            Decimal("1"),
+            PercentageFeeModel(Decimal("0.001")),
+            BasisPointsSlippageModel(Decimal("10")),
+        ),
+        AnalyticsConfiguration(252, Decimal("0.01")),
+    )
+    experiments = SQLAlchemyExperimentRepository(postgres_session)
+    strategies = SQLAlchemyStrategyRepository(postgres_session)
+    datasets = SQLAlchemyDatasetRepository(postgres_session)
+    loader = LoadDatasetSnapshot(LocalParquetDatasetStorage(tmp_path), datasets)
+    before_versions = strategies.list_versions(execution.strategy_version.strategy_id)
+    stress = RunStressValidation(experiments, strategies, datasets, loader).execute(
+        execution.experiment_run_id,
+        StressTestingConfiguration(
+            (
+                StressScenario(
+                    "STRESS-FEES-2X",
+                    "Fees doubled",
+                    StressType.FEE_MULTIPLIER,
+                    {"multiplier": Decimal("2")},
+                ),
+                StressScenario(
+                    "STRESS-FEES-3X",
+                    "Fees tripled",
+                    StressType.FEE_MULTIPLIER,
+                    {"multiplier": Decimal("3")},
+                ),
+                StressScenario(
+                    "STRESS-SLIPPAGE-2X",
+                    "Slippage doubled",
+                    StressType.SLIPPAGE_MULTIPLIER,
+                    {"multiplier": Decimal("2")},
+                ),
+                StressScenario(
+                    "STRESS-DELAY-1",
+                    "One additional bar delay",
+                    StressType.EXECUTION_DELAY,
+                    {"additional_delay_bars": 1},
+                ),
+                StressScenario(
+                    "STRESS-ADVERSE-10BPS",
+                    "Additional adverse execution",
+                    StressType.ADVERSE_PRICE,
+                    {"additional_basis_points": Decimal("10")},
+                ),
+                StressScenario(
+                    "STRESS-PARAMETERS-A",
+                    "Explicit parameter perturbation",
+                    StressType.PARAMETER_PERTURBATION,
+                    {"parameters": {"short_window": 1, "long_window": 3}},
+                ),
+            )
+        ),
+    )
+    after_versions = strategies.list_versions(execution.strategy_version.strategy_id)
+    by_id = {
+        result.scenario.id: result for result in stress.analysis.scenario_results
+    }
+    assert (
+        stress.analysis.baseline_backtest.final_equity
+        >= by_id["STRESS-FEES-2X"].backtest_result.final_equity
+        >= by_id["STRESS-FEES-3X"].backtest_result.final_equity
+    )
+    assert (
+        stress.analysis.baseline_backtest.final_equity
+        >= by_id["STRESS-SLIPPAGE-2X"].backtest_result.final_equity
+    )
+    assert before_versions == after_versions
+
+    fresh_session = Session(bind=postgres_session.connection(), expire_on_commit=False)
+    try:
+        fresh_experiments = SQLAlchemyExperimentRepository(fresh_session)
+        fresh_strategies = SQLAlchemyStrategyRepository(fresh_session)
+        fresh_datasets = SQLAlchemyDatasetRepository(fresh_session)
+        fresh_loader = LoadDatasetSnapshot(
+            LocalParquetDatasetStorage(tmp_path), fresh_datasets
+        )
+        reproduced = ReproduceStressValidation(
+            fresh_experiments,
+            fresh_strategies,
+            fresh_datasets,
+            fresh_loader,
+        ).execute(stress.validation_run_id)
+        persisted = fresh_experiments.list_validations(
+            execution.experiment_run_id
+        )
+    finally:
+        fresh_session.close()
+
+    assert reproduced.matches
+    assert reproduced.mismatches == ()
+    assert reproduced.reproduced_fingerprint == stress.fingerprint
+    assert reproduced.result.analysis == stress.analysis
+    assert [item.validation_type for item in persisted] == [
+        ValidationType.BACKTEST,
+        ValidationType.STRESS,
+    ]

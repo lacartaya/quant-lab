@@ -21,6 +21,15 @@ from quant.application.experiments.run_experiment import (
     ExperimentLineageError,
     RunExperiment,
 )
+from quant.application.experiments.stress import (
+    STRESS_VALIDATION_VERSION,
+    ReproduceStressValidation,
+    RunStressValidation,
+    StressReproductionResult,
+    StressValidationLineageError,
+    StressValidationResult,
+    apply_stress_scenario,
+)
 from quant.application.experiments.walk_forward import (
     WALK_FORWARD_VERSION,
     ReproduceWalkForwardValidation,
@@ -43,6 +52,13 @@ __all__ = [
     "ReproductionResult",
     "RunExperiment",
     "RunParameterSensitivityValidation",
+    "RunStressValidation",
+    "ReproduceStressValidation",
+    "STRESS_VALIDATION_VERSION",
+    "StressReproductionResult",
+    "StressValidationLineageError",
+    "StressValidationResult",
+    "apply_stress_scenario",
     "RunWalkForwardValidation",
     "UnsupportedVersionError",
     "ReproduceWalkForwardValidation",
