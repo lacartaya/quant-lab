@@ -22,6 +22,12 @@ class RecordingExperimentRepository:
     def get(self, experiment_id: UUID) -> Experiment | None:
         return None
 
+    def list_all(self) -> Sequence[Experiment]:
+        return list(self.added)
+
+    def list_for_hypothesis(self, hypothesis_id: UUID) -> Sequence[Experiment]:
+        return [item for item in self.added if item.hypothesis_id == hypothesis_id]
+
     def add_run(self, run: ExperimentRun) -> None:
         raise NotImplementedError
 

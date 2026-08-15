@@ -32,3 +32,9 @@ class SQLAlchemyHypothesisRepository:
             .order_by(HypothesisModel.created_at, HypothesisModel.id)
         )
         return [hypothesis_from_model(row) for row in self._session.scalars(statement)]
+
+    def list_all(self) -> Sequence[Hypothesis]:
+        statement = select(HypothesisModel).order_by(
+            HypothesisModel.created_at, HypothesisModel.id
+        )
+        return [hypothesis_from_model(row) for row in self._session.scalars(statement)]

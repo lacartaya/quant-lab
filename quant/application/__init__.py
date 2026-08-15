@@ -47,6 +47,14 @@ from quant.application.experiments import (
     WalkForwardReproductionResult,
     WalkForwardValidationResult,
 )
+from quant.application.operator_queries import (
+    DashboardSummary,
+    ExperimentDetail,
+    ExperimentSummary,
+    HypothesisDetail,
+    OperatorQueries,
+    OperatorResourceNotFound,
+)
 from quant.application.register_experiment import RegisterExperiment
 from quant.application.research_memory import (
     CheckPriorArt,
@@ -85,6 +93,12 @@ __all__ = [
     "ReproductionLineageError",
     "ReproductionResult",
     "RegisterExperiment",
+    "DashboardSummary",
+    "ExperimentDetail",
+    "ExperimentSummary",
+    "HypothesisDetail",
+    "OperatorQueries",
+    "OperatorResourceNotFound",
     "CheckPriorArt",
     "DuplicateHypothesisError",
     "KnowledgeEvidenceError",

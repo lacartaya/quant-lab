@@ -40,6 +40,20 @@ class SQLAlchemyExperimentRepository:
         row = self._session.get(ExperimentModel, experiment_id)
         return experiment_from_model(row) if row is not None else None
 
+    def list_all(self) -> Sequence[Experiment]:
+        statement = select(ExperimentModel).order_by(
+            ExperimentModel.created_at, ExperimentModel.id
+        )
+        return [experiment_from_model(row) for row in self._session.scalars(statement)]
+
+    def list_for_hypothesis(self, hypothesis_id: UUID) -> Sequence[Experiment]:
+        statement = (
+            select(ExperimentModel)
+            .where(ExperimentModel.hypothesis_id == hypothesis_id)
+            .order_by(ExperimentModel.created_at, ExperimentModel.id)
+        )
+        return [experiment_from_model(row) for row in self._session.scalars(statement)]
+
     def add_run(self, run: ExperimentRun) -> None:
         self._session.add(experiment_run_to_model(run))
         self._session.flush()

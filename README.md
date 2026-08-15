@@ -1,8 +1,8 @@
 # Quant Lab
 
 Quant Lab is an AI-assisted platform for quantitative research and validation.
-This repository currently provides its engineering foundation; it does not yet
-contain strategies, backtesting, integrations, or live-trading functionality.
+This repository provides deterministic strategy research, validation, research
+memory, and a local operator interface. It does not provide live trading.
 
 ## Prerequisites
 
@@ -49,6 +49,32 @@ docker compose down
 ```
 
 PostgreSQL data is retained in the named Docker volume `postgres_data`.
+
+## Operator API and dashboard
+
+After starting PostgreSQL and applying migrations, start the local API and
+dashboard:
+
+```bash
+python -m apps.api
+```
+
+- API: `http://127.0.0.1:8000/api/v1`
+- OpenAPI: `http://127.0.0.1:8000/docs`
+- Dashboard: `http://127.0.0.1:8000/dashboard/`
+
+For containerized local operation:
+
+```bash
+docker compose up --build postgres api
+```
+
+The read-oriented interface supports experiment and lineage inspection,
+validation and benchmark evidence, adversarial findings, gate decisions,
+hypothesis and research-memory queries, and structured prior-art checks. The
+dashboard has no trading controls and cannot edit authoritative metrics,
+findings, or gate results. It is intended for local/internal use; authentication
+and public deployment are not included.
 
 Run PostgreSQL integration tests after starting the service and applying the
 migration:

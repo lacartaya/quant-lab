@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Quant Lab · Research Operations</title>
+  <link rel="stylesheet" href="/dashboard/styles.css">
+</head>
+<body>
+  <header>
+    <div><span class="eyebrow">RESEARCH OPERATIONS</span><h1>Quant Lab</h1></div>
+    <nav><a href="/dashboard/">Overview</a><a href="#knowledge">Knowledge</a><a href="/docs">API</a></nav>
+  </header>
+  <main>
+    <div id="error" class="error hidden"></div>
+    <section id="overview">
+      <div class="section-heading"><div><span class="eyebrow">SYSTEM STATE</span><h2>Evidence at a glance</h2></div><span id="updated" class="muted"></span></div>
+      <div id="summary" class="summary-grid"><div class="empty">Loading research state…</div></div>
+      <div class="panel">
+        <div class="section-heading"><h2>Experiments</h2><span class="muted">Newest first</span></div>
+        <div id="experiments" class="empty">Loading experiments…</div>
+      </div>
+      <div id="knowledge" class="panel">
+        <div class="section-heading"><h2>Research memory</h2><span class="muted">Failed work remains evidence</span></div>
+        <div id="knowledge-list" class="empty">Loading knowledge…</div>
+      </div>
+      <div class="panel">
+        <div class="section-heading"><h2>Prior-art check</h2><span class="muted">Evaluation only · creates nothing</span></div>
+        <form id="prior-art-form" class="prior-form">
+          <label>Strategy family<input name="strategy_family" required value="moving_average_trend"></label>
+          <label>Market<input name="market" required value="US_EQUITIES"></label>
+          <label>Instrument<input name="instrument" required value="SPY"></label>
+          <label>Timeframe<input name="timeframe" required value="1D"></label>
+          <label>Parameters (JSON)<input name="parameters" required value='{"short_window":50,"long_window":200}'></label>
+          <label>Relative tolerance<input name="tolerance" type="number" min="0" max="1" step="0.01" value="0.05"></label>
+          <button type="submit">Check prior art</button>
+        </form>
+        <pre id="prior-art-result" class="result hidden"></pre>
+      </div>
+    </section>
+    <section id="experiment-detail" class="hidden"></section>
+  </main>
+  <footer>Local/internal operator interface · no trading controls · no metric editing</footer>
+  <script src="/dashboard/app.js" defer></script>
+</body>
+</html>

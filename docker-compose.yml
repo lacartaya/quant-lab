@@ -10,5 +10,21 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
+  api:
+    build: .
+    command: python -m apps.api
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-quant_lab}
+      POSTGRES_USER: ${POSTGRES_USER:-quant_lab}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-quant_lab_dev}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      API_HOST: 0.0.0.0
+      API_PORT: 8000
+    ports:
+      - "${API_PORT:-8000}:8000"
+    depends_on:
+      - postgres
+
 volumes:
   postgres_data:
