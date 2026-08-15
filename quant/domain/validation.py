@@ -18,6 +18,7 @@ class ValidationType(StrEnum):
     WALK_FORWARD = "walk_forward"
     STRESS = "stress"
     MONTE_CARLO = "monte_carlo"
+    PARAMETER_SENSITIVITY = "parameter_sensitivity"
 
 
 class ValidationStatus(StrEnum):

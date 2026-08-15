@@ -125,5 +125,19 @@ test window. Resolved boundaries and material evidence are persisted and
 fingerprinted for reproduction. These historical simulations do not prove a
 durable trading edge.
 
+## Parameter sensitivity
+
+Parameter sensitivity asks whether a fixed strategy remains reasonably stable
+when explicitly configured nearby parameters change. Quant Lab evaluates the
+finite surface with identical data, execution costs, and analytics assumptions,
+records every valid combination, and reports dispersion and baseline-neighbor
+evidence. A narrow isolated historical optimum is more suspicious than a broad,
+stable region, but the analysis makes no automatic quality decision.
+
+Sensitivity candidates do not modify or create StrategyVersions, and the system
+does not select or adopt the historically best combination. The currently
+supported `FULL_HISTORY_RESEARCH` scope is explicitly research-contaminated for
+future OOS interpretation.
+
 All tests, including fast domain tests, can be run with `pytest`. If PostgreSQL
 is unavailable, integration tests are skipped while unit tests still run.

@@ -22,12 +22,18 @@ class UnsupportedVersionError(ValueError):
 
 
 def build_strategy(version: StrategyVersion) -> MovingAverageTrendStrategy:
+    return build_strategy_for_parameters(version, version.parameters)
+
+
+def build_strategy_for_parameters(
+    version: StrategyVersion, parameters: Mapping[str, object]
+) -> MovingAverageTrendStrategy:
     if version.algorithm_key != MovingAverageTrendStrategy.strategy_key:
         raise UnsupportedVersionError(
             f"unsupported strategy algorithm: {version.algorithm_key}"
         )
-    short_window = version.parameters.get("short_window")
-    long_window = version.parameters.get("long_window")
+    short_window = parameters.get("short_window")
+    long_window = parameters.get("long_window")
     if not isinstance(short_window, int) or isinstance(short_window, bool):
         raise ValueError("short_window must be persisted as an integer")
     if not isinstance(long_window, int) or isinstance(long_window, bool):

@@ -17,8 +17,10 @@ from quant.analytics import AnalyticsConfiguration
 from quant.application import DatasetIntegrityError, LoadDatasetSnapshot
 from quant.application.experiments import (
     ReproduceExperiment,
+    ReproduceParameterSensitivityValidation,
     ReproduceWalkForwardValidation,
     RunExperiment,
+    RunParameterSensitivityValidation,
     RunWalkForwardValidation,
 )
 from quant.application.experiments.evidence import canonical_value
@@ -41,7 +43,12 @@ from quant.domain import (
     ValidationStatus,
     ValidationType,
 )
-from quant.validation import WalkForwardConfiguration, WalkForwardMode
+from quant.validation import (
+    ParameterSensitivityConfiguration,
+    ParameterSpaceTooLarge,
+    WalkForwardConfiguration,
+    WalkForwardMode,
+)
 
 pytestmark = pytest.mark.integration
 NOW = datetime(2026, 8, 15, 10, tzinfo=UTC)
@@ -313,3 +320,91 @@ def test_walk_forward_persists_and_reproduces_from_a_fresh_session(
         ValidationType.BACKTEST,
         ValidationType.WALK_FORWARD,
     ]
+
+
+def test_parameter_sensitivity_preserves_strategy_and_reproduces_after_restart(
+    postgres_session: Session, tmp_path: Path
+) -> None:
+    experiment = _persist_lineage(postgres_session, tmp_path)
+    runner, _ = _services(postgres_session, tmp_path)
+    execution = runner.execute(
+        experiment.id,
+        BacktestConfiguration(
+            Decimal("100"),
+            Decimal("1"),
+            PercentageFeeModel(Decimal("0.001")),
+            BasisPointsSlippageModel(Decimal("10")),
+        ),
+        AnalyticsConfiguration(252, Decimal("0.01")),
+    )
+    experiments = SQLAlchemyExperimentRepository(postgres_session)
+    strategies = SQLAlchemyStrategyRepository(postgres_session)
+    datasets = SQLAlchemyDatasetRepository(postgres_session)
+    loader = LoadDatasetSnapshot(LocalParquetDatasetStorage(tmp_path), datasets)
+    before_versions = strategies.list_versions(execution.strategy_version.strategy_id)
+    sensitivity_runner = RunParameterSensitivityValidation(
+        experiments, strategies, datasets, loader
+    )
+    with pytest.raises(ParameterSpaceTooLarge):
+        sensitivity_runner.execute(
+            execution.experiment_run_id,
+            ParameterSensitivityConfiguration(
+                {"short_window": (1, 2), "long_window": (3, 4)},
+                maximum_combinations=3,
+            ),
+        )
+    assert [
+        item.validation_type
+        for item in experiments.list_validations(execution.experiment_run_id)
+    ] == [ValidationType.BACKTEST]
+    sensitivity = sensitivity_runner.execute(
+        execution.experiment_run_id,
+        ParameterSensitivityConfiguration(
+            {"short_window": (1, 2), "long_window": (3, 4)},
+            maximum_combinations=4,
+        ),
+    )
+    after_versions = strategies.list_versions(execution.strategy_version.strategy_id)
+
+    fresh_session = Session(bind=postgres_session.connection(), expire_on_commit=False)
+    try:
+        fresh_experiments = SQLAlchemyExperimentRepository(fresh_session)
+        fresh_strategies = SQLAlchemyStrategyRepository(fresh_session)
+        fresh_datasets = SQLAlchemyDatasetRepository(fresh_session)
+        fresh_loader = LoadDatasetSnapshot(
+            LocalParquetDatasetStorage(tmp_path), fresh_datasets
+        )
+        reproduced = ReproduceParameterSensitivityValidation(
+            fresh_experiments,
+            fresh_strategies,
+            fresh_datasets,
+            fresh_loader,
+        ).execute(sensitivity.validation_run_id)
+        persisted = fresh_experiments.list_validations(
+            execution.experiment_run_id
+        )
+    finally:
+        fresh_session.close()
+
+    assert before_versions == after_versions
+    assert reproduced.matches
+    assert reproduced.mismatches == ()
+    assert reproduced.reproduced_fingerprint == sensitivity.fingerprint
+    assert reproduced.result.analysis == sensitivity.analysis
+    assert len(sensitivity.analysis.candidates) == 4
+    assert sum(
+        item.combination.is_baseline for item in sensitivity.analysis.candidates
+    ) == 1
+    assert all(
+        item.backtest_result.configuration
+        == execution.backtest_result.configuration
+        for item in sensitivity.analysis.candidates
+    )
+    assert [item.validation_type for item in persisted] == [
+        ValidationType.BACKTEST,
+        ValidationType.PARAMETER_SENSITIVITY,
+    ]
+    evaluation = persisted[1].configuration["evaluation"]
+    assert isinstance(evaluation, dict)
+    assert evaluation["scope"] == "full_history_research"
+    assert evaluation["contaminates_future_oos_interpretation"] is True
