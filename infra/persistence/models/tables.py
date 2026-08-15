@@ -47,6 +47,36 @@ class HypothesisModel(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
+class KnowledgeRecordModel(Base):
+    __tablename__ = "knowledge_records"
+
+    id: Mapped[UUID] = mapped_column(PostgreSQLUUID(as_uuid=True), primary_key=True)
+    hypothesis_id: Mapped[UUID] = mapped_column(
+        PostgreSQLUUID(as_uuid=True), ForeignKey("hypotheses.id"), index=True
+    )
+    derived_from_hypothesis_id: Mapped[UUID | None] = mapped_column(
+        PostgreSQLUUID(as_uuid=True), ForeignKey("hypotheses.id"), index=True
+    )
+    status: Mapped[str] = mapped_column(String(32), index=True)
+    strategy_family: Mapped[str] = mapped_column(String(100), index=True)
+    market: Mapped[str] = mapped_column(String(100), index=True)
+    instrument: Mapped[str] = mapped_column(String(100), index=True)
+    timeframe: Mapped[str] = mapped_column(String(50), index=True)
+    parameters: Mapped[dict[str, object]] = mapped_column(JSONB)
+    execution_model: Mapped[str | None] = mapped_column(String(100))
+    cost_model: Mapped[str | None] = mapped_column(String(100))
+    regime_scope: Mapped[str | None] = mapped_column(String(100))
+    tested_start_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    tested_end_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    summary: Mapped[str] = mapped_column(Text)
+    rejection_reason: Mapped[str | None] = mapped_column(Text)
+    reconsideration_conditions: Mapped[list[str]] = mapped_column(JSONB)
+    reconsideration_rationale: Mapped[str | None] = mapped_column(Text)
+    evidence_refs: Mapped[list[dict[str, object]]] = mapped_column(JSONB)
+    research_fingerprint: Mapped[str] = mapped_column(String(64), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
 class StrategyModel(Base):
     __tablename__ = "strategies"
 

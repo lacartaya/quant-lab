@@ -48,6 +48,15 @@ from quant.application.experiments import (
     WalkForwardValidationResult,
 )
 from quant.application.register_experiment import RegisterExperiment
+from quant.application.research_memory import (
+    CheckPriorArt,
+    DuplicateHypothesisError,
+    KnowledgeEvidenceError,
+    RegisterHypothesisWithPriorArt,
+    RejectedPriorArtError,
+    RejectHypothesis,
+    SearchResearchKnowledge,
+)
 
 __all__ = [
     "AdversarialLineageError",
@@ -76,6 +85,13 @@ __all__ = [
     "ReproductionLineageError",
     "ReproductionResult",
     "RegisterExperiment",
+    "CheckPriorArt",
+    "DuplicateHypothesisError",
+    "KnowledgeEvidenceError",
+    "RegisterHypothesisWithPriorArt",
+    "RejectHypothesis",
+    "RejectedPriorArtError",
+    "SearchResearchKnowledge",
     "RunExperiment",
     "RunAdversarialValidation",
     "RunMonteCarloValidation",

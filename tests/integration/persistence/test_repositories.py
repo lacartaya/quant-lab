@@ -8,27 +8,36 @@ from infra.persistence.repositories import (
     SQLAlchemyDatasetRepository,
     SQLAlchemyExperimentRepository,
     SQLAlchemyHypothesisRepository,
+    SQLAlchemyKnowledgeRepository,
     SQLAlchemyStrategyRepository,
 )
 from quant.application import RegisterExperiment
 from quant.domain import (
     AdjustmentPolicy,
     DatasetSnapshot,
+    EvidenceKind,
+    EvidenceReference,
     Experiment,
     ExperimentRun,
     ExperimentRunStatus,
     ExperimentStatus,
     Hypothesis,
     HypothesisStatus,
+    KnowledgeQuery,
+    KnowledgeRecord,
     MetricSet,
+    PriorArtConfiguration,
     PromotionDecision,
     PromotionDecisionType,
+    ReconsiderationCondition,
+    ResearchSignature,
     Strategy,
     StrategyVersion,
     ValidationRun,
     ValidationStatus,
     ValidationType,
 )
+from quant.knowledge import check_prior_art, research_fingerprint
 from quant.ports import ExperimentRepository
 
 pytestmark = pytest.mark.integration
@@ -86,13 +95,71 @@ def test_hypothesis_round_trip_and_lifecycle(postgres_session: Session) -> None:
     assert repository.get(original.id) == updated
 
 
+def test_rejected_research_memory_round_trip_and_search(
+    postgres_session: Session,
+) -> None:
+    hypotheses = SQLAlchemyHypothesisRepository(postgres_session)
+    knowledge = SQLAlchemyKnowledgeRepository(postgres_session)
+    hypothesis = make_hypothesis()
+    hypotheses.add(hypothesis)
+    signature = ResearchSignature(
+        strategy_family="trend",
+        market="European equities",
+        instrument="DAX",
+        timeframe="daily",
+        parameters={"short_window": 50, "long_window": 200},
+        execution_model="backtest-engine-v1",
+        cost_model="percentage-fee-v1",
+    )
+    evidence_id = uuid4()
+    record = KnowledgeRecord(
+        id=uuid4(),
+        hypothesis_id=hypothesis.id,
+        derived_from_hypothesis_id=None,
+        status=HypothesisStatus.REJECTED,
+        signature=signature,
+        tested_start_at=NOW - timedelta(days=365),
+        tested_end_at=NOW,
+        summary="Rejected in the tested daily DAX domain",
+        rejection_reason="No robust out-of-sample edge",
+        reconsideration_conditions=(ReconsiderationCondition.NEW_MARKET,),
+        reconsideration_rationale="A different market changes the tested domain",
+        evidence_refs=(EvidenceReference(EvidenceKind.VALIDATION_RUN, evidence_id),),
+        research_fingerprint=research_fingerprint(signature),
+        created_at=NOW,
+    )
+    knowledge.add(record)
+
+    connection = postgres_session.connection()
+    postgres_session.flush()
+    postgres_session.close()
+    restarted_session = Session(bind=connection, expire_on_commit=False)
+    restarted = SQLAlchemyKnowledgeRepository(restarted_session)
+    assert restarted.get(record.id) == record
+    assert restarted.list_for_hypothesis(hypothesis.id) == [record]
+    assert restarted.search(
+        KnowledgeQuery(
+            strategy_family="trend",
+            market="European equities",
+            instrument="DAX",
+            timeframe="daily",
+            status=HypothesisStatus.REJECTED,
+        )
+    ) == [record]
+    prior_art = check_prior_art(
+        signature,
+        restarted.list_all(),
+        PriorArtConfiguration(numeric_parameter_relative_tolerance=0.05),
+    )
+    assert prior_art.duplicate_detected
+    restarted_session.close()
+
+
 def test_complete_research_lineage_round_trip(postgres_session: Session) -> None:
     hypotheses = SQLAlchemyHypothesisRepository(postgres_session)
     strategies = SQLAlchemyStrategyRepository(postgres_session)
     datasets = SQLAlchemyDatasetRepository(postgres_session)
-    experiments: ExperimentRepository = SQLAlchemyExperimentRepository(
-        postgres_session
-    )
+    experiments: ExperimentRepository = SQLAlchemyExperimentRepository(postgres_session)
 
     hypothesis = make_hypothesis()
     hypotheses.add(hypothesis)

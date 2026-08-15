@@ -6,6 +6,7 @@ from infra.persistence.models import (
     ExperimentRunModel,
     GateEvaluationModel,
     HypothesisModel,
+    KnowledgeRecordModel,
     PromotionDecisionModel,
     StrategyModel,
     StrategyVersionModel,
@@ -32,6 +33,13 @@ from quant.domain import (
     ValidationRun,
     ValidationStatus,
     ValidationType,
+)
+from quant.domain.knowledge import (
+    EvidenceKind,
+    EvidenceReference,
+    KnowledgeRecord,
+    ReconsiderationCondition,
+    ResearchSignature,
 )
 
 
@@ -69,6 +77,70 @@ def hypothesis_from_model(value: HypothesisModel) -> Hypothesis:
         rejection_criteria=value.rejection_criteria,
         status=HypothesisStatus(value.status),
         reconsideration_conditions=value.reconsideration_conditions,
+        created_at=value.created_at,
+    )
+
+
+def knowledge_to_model(value: KnowledgeRecord) -> KnowledgeRecordModel:
+    return KnowledgeRecordModel(
+        id=value.id,
+        hypothesis_id=value.hypothesis_id,
+        derived_from_hypothesis_id=value.derived_from_hypothesis_id,
+        status=value.status.value,
+        strategy_family=value.signature.strategy_family,
+        market=value.signature.market,
+        instrument=value.signature.instrument,
+        timeframe=value.signature.timeframe,
+        parameters=dict(value.signature.parameters),
+        execution_model=value.signature.execution_model,
+        cost_model=value.signature.cost_model,
+        regime_scope=value.signature.regime_scope,
+        tested_start_at=value.tested_start_at,
+        tested_end_at=value.tested_end_at,
+        summary=value.summary,
+        rejection_reason=value.rejection_reason,
+        reconsideration_conditions=[
+            item.value for item in value.reconsideration_conditions
+        ],
+        reconsideration_rationale=value.reconsideration_rationale,
+        evidence_refs=[
+            {"kind": item.kind.value, "id": str(item.id)}
+            for item in value.evidence_refs
+        ],
+        research_fingerprint=value.research_fingerprint,
+        created_at=value.created_at,
+    )
+
+
+def knowledge_from_model(value: KnowledgeRecordModel) -> KnowledgeRecord:
+    return KnowledgeRecord(
+        id=value.id,
+        hypothesis_id=value.hypothesis_id,
+        derived_from_hypothesis_id=value.derived_from_hypothesis_id,
+        status=HypothesisStatus(value.status),
+        signature=ResearchSignature(
+            strategy_family=value.strategy_family,
+            market=value.market,
+            instrument=value.instrument,
+            timeframe=value.timeframe,
+            parameters=value.parameters,
+            execution_model=value.execution_model,
+            cost_model=value.cost_model,
+            regime_scope=value.regime_scope,
+        ),
+        tested_start_at=value.tested_start_at,
+        tested_end_at=value.tested_end_at,
+        summary=value.summary,
+        rejection_reason=value.rejection_reason,
+        reconsideration_conditions=tuple(
+            ReconsiderationCondition(item) for item in value.reconsideration_conditions
+        ),
+        reconsideration_rationale=value.reconsideration_rationale,
+        evidence_refs=tuple(
+            EvidenceReference(EvidenceKind(str(item["kind"])), UUID(str(item["id"])))
+            for item in value.evidence_refs
+        ),
+        research_fingerprint=value.research_fingerprint,
         created_at=value.created_at,
     )
 

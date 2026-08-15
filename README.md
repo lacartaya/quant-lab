@@ -185,5 +185,14 @@ rules execute, and evaluations remain immutable when policies or evidence change
 A PASS means policy eligibility. It is not proof of future profitability or
 safety, does not allocate capital, and does not start paper or live trading.
 
+## Research memory
+
+Quant Lab records successful and failed hypotheses together with their evidence
+and tested domain. Before new research is registered, deterministic structured
+prior-art checks can identify exact duplicates and materially similar work.
+
+`REJECTED` does not mean universally invalid. It applies to the recorded market,
+instrument, timeframe, period, parameters, costs, and validation evidence.
+
 All tests, including fast domain tests, can be run with `pytest`. If PostgreSQL
 is unavailable, integration tests are skipped while unit tests still run.

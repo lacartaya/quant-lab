@@ -17,6 +17,20 @@ from quant.domain.gate import (
     ValidationGateResult,
 )
 from quant.domain.hypothesis import Hypothesis, HypothesisStatus
+from quant.domain.knowledge import (
+    EvidenceKind,
+    EvidenceReference,
+    HypothesisKnowledgeSummary,
+    KnowledgeQuery,
+    KnowledgeRecord,
+    PriorArtCheckResult,
+    PriorArtConfiguration,
+    PriorArtDisposition,
+    PriorArtMatch,
+    PriorArtMatchType,
+    ReconsiderationCondition,
+    ResearchSignature,
+)
 from quant.domain.market_data import HistoricalDataRequest, HistoricalDataset, MarketBar
 from quant.domain.promotion import PromotionDecision, PromotionDecisionType
 from quant.domain.signal import Signal, SignalAction
@@ -44,6 +58,18 @@ __all__ = [
     "HypothesisStatus",
     "HistoricalDataRequest",
     "HistoricalDataset",
+    "EvidenceKind",
+    "EvidenceReference",
+    "HypothesisKnowledgeSummary",
+    "KnowledgeQuery",
+    "KnowledgeRecord",
+    "PriorArtCheckResult",
+    "PriorArtConfiguration",
+    "PriorArtDisposition",
+    "PriorArtMatch",
+    "PriorArtMatchType",
+    "ReconsiderationCondition",
+    "ResearchSignature",
     "MarketBar",
     "MetricSet",
     "PromotionDecision",
