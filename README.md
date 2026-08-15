@@ -151,5 +151,18 @@ lineage, and is persisted independently. Survival under stress is evidence of
 historical robustness—not proof of future profitability—and stress validation
 does not automatically promote or reject a strategy.
 
+## Monte Carlo / bootstrap robustness
+
+Stress testing asks what happens under explicitly worse assumptions. Monte Carlo
+bootstrap asks what range of outcomes appears when the strategy's observed
+completed-trade returns occur in different sampled sequences.
+
+Quant Lab resamples the persisted empirical trade-return sequence with replacement
+using an explicit seed, compounds each simulated path, and reports distributions
+of final equity, return, drawdown, and losing streaks. Results are persisted as
+independent validation evidence and can be reproduced after restart. They are
+conditional empirical bootstrap results—not future-price predictions or
+guarantees about future strategy performance.
+
 All tests, including fast domain tests, can be run with `pytest`. If PostgreSQL
 is unavailable, integration tests are skipped while unit tests still run.

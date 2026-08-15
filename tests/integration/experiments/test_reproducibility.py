@@ -1,3 +1,4 @@
+from collections.abc import Mapping
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
@@ -17,10 +18,12 @@ from quant.analytics import AnalyticsConfiguration
 from quant.application import DatasetIntegrityError, LoadDatasetSnapshot
 from quant.application.experiments import (
     ReproduceExperiment,
+    ReproduceMonteCarloValidation,
     ReproduceParameterSensitivityValidation,
     ReproduceStressValidation,
     ReproduceWalkForwardValidation,
     RunExperiment,
+    RunMonteCarloValidation,
     RunParameterSensitivityValidation,
     RunStressValidation,
     RunWalkForwardValidation,
@@ -46,8 +49,10 @@ from quant.domain import (
     ValidationType,
 )
 from quant.validation import (
+    MonteCarloConfiguration,
     ParameterSensitivityConfiguration,
     ParameterSpaceTooLarge,
+    SamplingMethod,
     StressScenario,
     StressTestingConfiguration,
     StressType,
@@ -74,7 +79,11 @@ def _bars() -> tuple[MarketBar, ...]:
     )
 
 
-def _persist_lineage(session: Session, root: Path) -> Experiment:
+def _persist_lineage(
+    session: Session,
+    root: Path,
+    market_bars: tuple[MarketBar, ...] | None = None,
+) -> Experiment:
     hypotheses = SQLAlchemyHypothesisRepository(session)
     strategies = SQLAlchemyStrategyRepository(session)
     datasets = SQLAlchemyDatasetRepository(session)
@@ -105,7 +114,7 @@ def _persist_lineage(session: Session, root: Path) -> Experiment:
         {"short_window": 2, "long_window": 3},
         NOW,
     )
-    bars = _bars()
+    bars = _bars() if market_bars is None else market_bars
     snapshot_id = uuid4()
     storage = LocalParquetDatasetStorage(root)
     location = storage.write(snapshot_id, bars)
@@ -521,3 +530,90 @@ def test_stress_suite_is_cost_monotonic_and_reproduces_after_restart(
         ValidationType.BACKTEST,
         ValidationType.STRESS,
     ]
+
+
+def test_monte_carlo_persists_compact_paths_and_reproduces_after_restart(
+    postgres_session: Session, tmp_path: Path
+) -> None:
+    closes = ("3", "2", "1", "4", "5", "1", "1", "5", "6", "1", "1")
+    bars = tuple(
+        MarketBar(
+            timestamp=NOW + timedelta(days=index),
+            open=Decimal(close),
+            high=Decimal(close),
+            low=Decimal(close),
+            close=Decimal(close),
+            volume=Decimal("100"),
+        )
+        for index, close in enumerate(closes)
+    )
+    experiment = _persist_lineage(postgres_session, tmp_path, bars)
+    runner, _ = _services(postgres_session, tmp_path)
+    execution = runner.execute(
+        experiment.id,
+        BacktestConfiguration(
+            Decimal("100"),
+            Decimal("1"),
+            PercentageFeeModel(Decimal("0.001")),
+            BasisPointsSlippageModel(Decimal("10")),
+        ),
+        AnalyticsConfiguration(252, Decimal("0.01")),
+    )
+    assert len(execution.backtest_result.trades) == 2
+    experiments = SQLAlchemyExperimentRepository(postgres_session)
+    datasets = SQLAlchemyDatasetRepository(postgres_session)
+    loader = LoadDatasetSnapshot(LocalParquetDatasetStorage(tmp_path), datasets)
+    validation = RunMonteCarloValidation(
+        experiments, datasets, loader
+    ).execute(
+        execution.experiment_run_id,
+        MonteCarloConfiguration(
+            simulation_count=100,
+            random_seed=42,
+            confidence_percentiles=(
+                Decimal("0.05"),
+                Decimal("0.50"),
+                Decimal("0.95"),
+            ),
+            sampling_method=SamplingMethod.TRADE_BOOTSTRAP,
+            drawdown_threshold=Decimal("-0.20"),
+            ruin_equity_fraction=Decimal("0.50"),
+        ),
+    )
+
+    fresh_session = Session(bind=postgres_session.connection(), expire_on_commit=False)
+    try:
+        fresh_experiments = SQLAlchemyExperimentRepository(fresh_session)
+        fresh_datasets = SQLAlchemyDatasetRepository(fresh_session)
+        fresh_loader = LoadDatasetSnapshot(
+            LocalParquetDatasetStorage(tmp_path), fresh_datasets
+        )
+        reproduced = ReproduceMonteCarloValidation(
+            fresh_experiments, fresh_datasets, fresh_loader
+        ).execute(validation.validation_run_id)
+        persisted = fresh_experiments.list_validations(
+            execution.experiment_run_id
+        )
+    finally:
+        fresh_session.close()
+
+    assert reproduced.matches
+    assert reproduced.mismatches == ()
+    assert reproduced.reproduced_fingerprint == validation.fingerprint
+    assert reproduced.result.analysis == validation.analysis
+    assert validation.analysis.source_observation_count == 2
+    assert len(validation.analysis.path_summaries) == 100
+    evidence = persisted[1].configuration
+    assert isinstance(evidence, Mapping)
+    assert "equity_curves" not in evidence
+    assert [item.validation_type for item in persisted] == [
+        ValidationType.BACKTEST,
+        ValidationType.MONTE_CARLO,
+    ]
+    snapshot = datasets.get(execution.dataset_snapshot_id)
+    assert snapshot is not None
+    (tmp_path / snapshot.storage_location).write_bytes(b"mutated evidence")
+    with pytest.raises(DatasetIntegrityError):
+        ReproduceMonteCarloValidation(experiments, datasets, loader).execute(
+            validation.validation_run_id
+        )

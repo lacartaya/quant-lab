@@ -1,5 +1,21 @@
 """Deterministic validation models and fold generation."""
 
+from quant.validation.monte_carlo import (
+    MAX_SIMULATION_COUNT,
+    MIN_OBSERVATION_COUNT,
+    MONTE_CARLO_VERSION,
+    MonteCarloAnalysis,
+    MonteCarloConfiguration,
+    MonteCarloDistributionSummary,
+    MonteCarloPathSummary,
+    SamplingMethod,
+    maximum_consecutive_losses,
+    percentile,
+    simulate_trade_bootstrap,
+    summarize_bootstrap_path,
+    summarize_monte_carlo,
+    trade_return_observations,
+)
 from quant.validation.parameter_sensitivity import (
     ParameterCandidateResult,
     ParameterCombination,
@@ -38,6 +54,13 @@ from quant.validation.walk_forward import (
 __all__ = [
     "WalkForwardAggregate",
     "ParameterCandidateResult",
+    "MAX_SIMULATION_COUNT",
+    "MIN_OBSERVATION_COUNT",
+    "MONTE_CARLO_VERSION",
+    "MonteCarloAnalysis",
+    "MonteCarloConfiguration",
+    "MonteCarloDistributionSummary",
+    "MonteCarloPathSummary",
     "ParameterCombination",
     "ParameterSensitivityAnalysis",
     "ParameterSensitivityConfiguration",
@@ -45,6 +68,7 @@ __all__ = [
     "ParameterSpace",
     "ParameterSpaceTooLarge",
     "SensitivityEvaluationScope",
+    "SamplingMethod",
     "StressAggregate",
     "StressAnalysis",
     "StressComparison",
@@ -60,8 +84,14 @@ __all__ = [
     "aggregate_walk_forward",
     "aggregate_stress_results",
     "compare_stress_result",
+    "maximum_consecutive_losses",
+    "percentile",
     "generate_walk_forward_folds",
     "generate_parameter_combinations",
     "relative_parameter_distance",
     "summarize_parameter_sensitivity",
+    "simulate_trade_bootstrap",
+    "summarize_monte_carlo",
+    "summarize_bootstrap_path",
+    "trade_return_observations",
 ]

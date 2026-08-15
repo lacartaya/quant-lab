@@ -4,6 +4,13 @@ from quant.application.experiments.models import (
     ExperimentExecutionResult,
     ReproductionResult,
 )
+from quant.application.experiments.monte_carlo import (
+    MonteCarloLineageError,
+    MonteCarloReproductionResult,
+    MonteCarloValidationResult,
+    ReproduceMonteCarloValidation,
+    RunMonteCarloValidation,
+)
 from quant.application.experiments.parameter_sensitivity import (
     PARAMETER_SENSITIVITY_VERSION,
     ParameterSensitivityLineageError,
@@ -42,6 +49,9 @@ from quant.application.experiments.walk_forward import (
 __all__ = [
     "ExperimentExecutionResult",
     "ExperimentLineageError",
+    "MonteCarloLineageError",
+    "MonteCarloReproductionResult",
+    "MonteCarloValidationResult",
     "PARAMETER_SENSITIVITY_VERSION",
     "ParameterSensitivityLineageError",
     "ParameterSensitivityReproductionResult",
@@ -51,9 +61,11 @@ __all__ = [
     "ReproductionLineageError",
     "ReproductionResult",
     "RunExperiment",
+    "RunMonteCarloValidation",
     "RunParameterSensitivityValidation",
     "RunStressValidation",
     "ReproduceStressValidation",
+    "ReproduceMonteCarloValidation",
     "STRESS_VALIDATION_VERSION",
     "StressReproductionResult",
     "StressValidationLineageError",
