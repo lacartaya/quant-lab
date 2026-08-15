@@ -75,5 +75,16 @@ and emits deterministic `LONG` or `FLAT` state signals after its warm-up period.
 The default 50/200 configuration is a non-optimized demonstration. It is not
 presented as a validated trading edge and makes no performance claim.
 
+## Deterministic backtesting
+
+The initial backtest engine simulates a single asset with LONG/FLAT state,
+integer market orders, explicit fees and deterministic slippage. Signals
+generated from a completed bar are executed no earlier than the next bar open,
+protecting the simulation from same-bar look-ahead assumptions.
+
+Open positions are marked to the final close rather than forcibly liquidated.
+The engine produces accounting and execution records only; it does not yet
+evaluate whether a strategy is good or calculate performance statistics.
+
 All tests, including fast domain tests, can be run with `pytest`. If PostgreSQL
 is unavailable, integration tests are skipped while unit tests still run.
