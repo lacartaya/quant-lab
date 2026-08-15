@@ -37,7 +37,14 @@ class BacktestEngine:
         dataset: HistoricalDataset,
         strategy: ExecutableStrategy,
         configuration: BacktestConfiguration,
+        *,
+        evaluation_start: datetime | None = None,
     ) -> BacktestResult:
+        if evaluation_start is not None:
+            if evaluation_start.tzinfo is None or evaluation_start.utcoffset() is None:
+                raise ValueError("evaluation_start must be timezone-aware")
+            if not any(bar.timestamp >= evaluation_start for bar in dataset.bars):
+                raise ValueError("evaluation_start is outside the dataset")
         portfolio = Portfolio(configuration.initial_cash)
         execution = ExecutionSimulator(
             configuration.fee_model, configuration.slippage_model
@@ -51,7 +58,10 @@ class BacktestEngine:
         pending: Signal | None = None
 
         for index, bar in enumerate(dataset.bars):
-            if pending is not None:
+            in_evaluation = (
+                evaluation_start is None or bar.timestamp >= evaluation_start
+            )
+            if in_evaluation and pending is not None:
                 order = self._create_order(
                     pending,
                     bar.timestamp,
@@ -72,7 +82,8 @@ class BacktestEngine:
                         trades.append(portfolio.apply_sell(fill))
                 pending = None
 
-            equity_curve.append(portfolio.mark(bar.timestamp, bar.close))
+            if in_evaluation:
+                equity_curve.append(portfolio.mark(bar.timestamp, bar.close))
             prefix = HistoricalDataset.from_bars(
                 market=dataset.market,
                 instrument=dataset.instrument,
@@ -83,10 +94,13 @@ class BacktestEngine:
             )
             current_signal = self._current_signal(strategy, prefix, bar.timestamp)
             if current_signal is not None:
-                signals.append(current_signal)
+                if in_evaluation:
+                    signals.append(current_signal)
                 desired_long = current_signal.action is SignalAction.LONG
                 if desired_long != portfolio.is_long:
                     pending = current_signal
+                elif not in_evaluation:
+                    pending = None
 
         final_point = equity_curve[-1]
         return BacktestResult(

@@ -111,5 +111,19 @@ its checksum, reconstructs exclusively from persisted lineage, and compares a
 canonical SHA-256 material-result fingerprint. A result that cannot be reproduced
 is not considered valid research evidence.
 
+## Historical validation views
+
+- **Backtest:** how the fixed strategy behaved across a historical sample.
+- **Out of sample:** how it behaved in one chronologically held-out future period.
+- **Walk-forward:** how the same fixed StrategyVersion repeatedly behaved across
+  multiple non-overlapping future periods.
+
+Walk-forward validation supports expanding and rolling bar-count windows. Each
+fold has independent starting capital, may use earlier bars only as signal
+warm-up context, and measures strategy and Buy & Hold performance only inside its
+test window. Resolved boundaries and material evidence are persisted and
+fingerprinted for reproduction. These historical simulations do not prove a
+durable trading edge.
+
 All tests, including fast domain tests, can be run with `pytest`. If PostgreSQL
 is unavailable, integration tests are skipped while unit tests still run.

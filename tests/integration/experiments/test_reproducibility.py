@@ -15,7 +15,12 @@ from infra.persistence.repositories import (
 )
 from quant.analytics import AnalyticsConfiguration
 from quant.application import DatasetIntegrityError, LoadDatasetSnapshot
-from quant.application.experiments import ReproduceExperiment, RunExperiment
+from quant.application.experiments import (
+    ReproduceExperiment,
+    ReproduceWalkForwardValidation,
+    RunExperiment,
+    RunWalkForwardValidation,
+)
 from quant.application.experiments.evidence import canonical_value
 from quant.backtest import (
     BacktestConfiguration,
@@ -36,6 +41,7 @@ from quant.domain import (
     ValidationStatus,
     ValidationType,
 )
+from quant.validation import WalkForwardConfiguration, WalkForwardMode
 
 pytestmark = pytest.mark.integration
 NOW = datetime(2026, 8, 15, 10, tzinfo=UTC)
@@ -241,3 +247,69 @@ def test_failed_execution_is_persisted_as_failed(
     assert len(runs) == 1
     assert runs[0].status is ExperimentRunStatus.FAILED
     assert runs[0].configuration["failure_reason"]
+
+
+def test_walk_forward_persists_and_reproduces_from_a_fresh_session(
+    postgres_session: Session, tmp_path: Path
+) -> None:
+    experiment = _persist_lineage(postgres_session, tmp_path)
+    runner, _ = _services(postgres_session, tmp_path)
+    execution = runner.execute(
+        experiment.id,
+        BacktestConfiguration(
+            Decimal("100"),
+            Decimal("1"),
+            PercentageFeeModel(Decimal("0.001")),
+            BasisPointsSlippageModel(Decimal("10")),
+        ),
+        AnalyticsConfiguration(252, Decimal("0.01")),
+    )
+    experiments = SQLAlchemyExperimentRepository(postgres_session)
+    strategies = SQLAlchemyStrategyRepository(postgres_session)
+    datasets = SQLAlchemyDatasetRepository(postgres_session)
+    loader = LoadDatasetSnapshot(LocalParquetDatasetStorage(tmp_path), datasets)
+    validation = RunWalkForwardValidation(
+        experiments, strategies, datasets, loader
+    ).execute(
+        execution.experiment_run_id,
+        WalkForwardConfiguration(WalkForwardMode.EXPANDING, 3, 2, 2),
+    )
+
+    fresh_session = Session(bind=postgres_session.connection(), expire_on_commit=False)
+    try:
+        fresh_experiments = SQLAlchemyExperimentRepository(fresh_session)
+        fresh_strategies = SQLAlchemyStrategyRepository(fresh_session)
+        fresh_datasets = SQLAlchemyDatasetRepository(fresh_session)
+        fresh_loader = LoadDatasetSnapshot(
+            LocalParquetDatasetStorage(tmp_path), fresh_datasets
+        )
+        reproduced = ReproduceWalkForwardValidation(
+            fresh_experiments,
+            fresh_strategies,
+            fresh_datasets,
+            fresh_loader,
+        ).execute(validation.validation_run_id)
+        persisted = fresh_experiments.list_validations(
+            execution.experiment_run_id
+        )
+    finally:
+        fresh_session.close()
+
+    assert reproduced.matches
+    assert reproduced.mismatches == ()
+    assert reproduced.reproduced_fingerprint == validation.fingerprint
+    assert reproduced.result.fold_results == validation.fold_results
+    assert reproduced.result.aggregate == validation.aggregate
+    assert len(validation.fold_results) == 2
+    assert all(
+        fold.strategy_version_id == str(execution.strategy_version_id)
+        for fold in validation.fold_results
+    )
+    assert all(
+        fold.backtest_result.initial_cash == Decimal("100")
+        for fold in validation.fold_results
+    )
+    assert [item.validation_type for item in persisted] == [
+        ValidationType.BACKTEST,
+        ValidationType.WALK_FORWARD,
+    ]
