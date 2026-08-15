@@ -43,6 +43,12 @@ from quant.application.experiments.stress import (
     StressValidationResult,
     apply_stress_scenario,
 )
+from quant.application.experiments.validation_gate import (
+    EvaluateValidationGate,
+    GateReproductionResult,
+    ReproduceValidationGate,
+    ValidationGateIntegrityError,
+)
 from quant.application.experiments.walk_forward import (
     WALK_FORWARD_VERSION,
     ReproduceWalkForwardValidation,
@@ -57,6 +63,8 @@ __all__ = [
     "AdversarialReproductionResult",
     "ExperimentExecutionResult",
     "ExperimentLineageError",
+    "EvaluateValidationGate",
+    "GateReproductionResult",
     "MonteCarloLineageError",
     "MonteCarloReproductionResult",
     "MonteCarloValidationResult",
@@ -84,8 +92,10 @@ __all__ = [
     "RunWalkForwardValidation",
     "UnsupportedVersionError",
     "ReproduceWalkForwardValidation",
+    "ReproduceValidationGate",
     "WalkForwardLineageError",
     "WalkForwardReproductionResult",
     "WalkForwardValidationResult",
     "WALK_FORWARD_VERSION",
+    "ValidationGateIntegrityError",
 ]

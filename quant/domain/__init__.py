@@ -7,6 +7,15 @@ from quant.domain.experiment import (
     ExperimentRunStatus,
     ExperimentStatus,
 )
+from quant.domain.gate import (
+    GateDecision,
+    GateRuleCode,
+    GateRuleDefinition,
+    GateRuleOutcome,
+    GateRuleResult,
+    ValidationGatePolicy,
+    ValidationGateResult,
+)
 from quant.domain.hypothesis import Hypothesis, HypothesisStatus
 from quant.domain.market_data import HistoricalDataRequest, HistoricalDataset, MarketBar
 from quant.domain.promotion import PromotionDecision, PromotionDecisionType
@@ -26,6 +35,11 @@ __all__ = [
     "ExperimentRun",
     "ExperimentRunStatus",
     "ExperimentStatus",
+    "GateDecision",
+    "GateRuleCode",
+    "GateRuleDefinition",
+    "GateRuleOutcome",
+    "GateRuleResult",
     "Hypothesis",
     "HypothesisStatus",
     "HistoricalDataRequest",
@@ -39,6 +53,8 @@ __all__ = [
     "Strategy",
     "StrategyVersion",
     "ValidationRun",
+    "ValidationGatePolicy",
+    "ValidationGateResult",
     "ValidationStatus",
     "ValidationType",
 ]

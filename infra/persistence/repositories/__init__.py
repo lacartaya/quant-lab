@@ -4,6 +4,7 @@ from infra.persistence.repositories.dataset_repository import (
 from infra.persistence.repositories.experiment_repository import (
     SQLAlchemyExperimentRepository,
 )
+from infra.persistence.repositories.gate_repository import SQLAlchemyGateRepository
 from infra.persistence.repositories.hypothesis_repository import (
     SQLAlchemyHypothesisRepository,
 )
@@ -14,6 +15,7 @@ from infra.persistence.repositories.strategy_repository import (
 __all__ = [
     "SQLAlchemyDatasetRepository",
     "SQLAlchemyExperimentRepository",
+    "SQLAlchemyGateRepository",
     "SQLAlchemyHypothesisRepository",
     "SQLAlchemyStrategyRepository",
 ]

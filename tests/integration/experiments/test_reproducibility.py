@@ -2,7 +2,7 @@ from collections.abc import Mapping
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from sqlalchemy.orm import Session
@@ -11,17 +11,20 @@ from infra.market_data import LocalParquetDatasetStorage
 from infra.persistence.repositories import (
     SQLAlchemyDatasetRepository,
     SQLAlchemyExperimentRepository,
+    SQLAlchemyGateRepository,
     SQLAlchemyHypothesisRepository,
     SQLAlchemyStrategyRepository,
 )
 from quant.analytics import AnalyticsConfiguration
 from quant.application import DatasetIntegrityError, LoadDatasetSnapshot
 from quant.application.experiments import (
+    EvaluateValidationGate,
     ReproduceAdversarialValidation,
     ReproduceExperiment,
     ReproduceMonteCarloValidation,
     ReproduceParameterSensitivityValidation,
     ReproduceStressValidation,
+    ReproduceValidationGate,
     ReproduceWalkForwardValidation,
     RunAdversarialValidation,
     RunExperiment,
@@ -30,7 +33,10 @@ from quant.application.experiments import (
     RunStressValidation,
     RunWalkForwardValidation,
 )
-from quant.application.experiments.evidence import canonical_value
+from quant.application.experiments.evidence import (
+    canonical_value,
+    evidence_fingerprint,
+)
 from quant.backtest import (
     BacktestConfiguration,
     BasisPointsSlippageModel,
@@ -42,11 +48,17 @@ from quant.domain import (
     Experiment,
     ExperimentRunStatus,
     ExperimentStatus,
+    GateDecision,
+    GateRuleCode,
+    GateRuleDefinition,
     Hypothesis,
     HypothesisStatus,
     MarketBar,
+    MetricSet,
     Strategy,
     StrategyVersion,
+    ValidationGatePolicy,
+    ValidationRun,
     ValidationStatus,
     ValidationType,
 )
@@ -687,3 +699,201 @@ def test_adversarial_report_persists_sources_and_reproduces_after_restart(
         )
         for finding in report.findings
     )
+
+
+def _derived_validation(
+    run_id: UUID,
+    validation_type: ValidationType,
+    material: dict[str, object],
+    metrics: MetricSet | None = None,
+) -> ValidationRun:
+    configuration = {
+        "version": "integration-fixture-v1",
+        **material,
+        "fingerprint": evidence_fingerprint(material),
+    }
+    return ValidationRun(
+        uuid4(),
+        run_id,
+        validation_type,
+        ValidationStatus.PASSED,
+        metrics,
+        configuration,
+        NOW,
+        NOW,
+    )
+
+
+def test_validation_gate_full_evidence_is_immutable_and_reproducible(
+    postgres_session: Session, tmp_path: Path
+) -> None:
+    experiment = _persist_lineage(postgres_session, tmp_path)
+    runner, _ = _services(postgres_session, tmp_path)
+    execution = runner.execute(
+        experiment.id,
+        BacktestConfiguration(
+            Decimal("100"),
+            Decimal("1"),
+            PercentageFeeModel(Decimal("0.001")),
+            BasisPointsSlippageModel(Decimal("10")),
+        ),
+        AnalyticsConfiguration(252),
+    )
+    experiments = SQLAlchemyExperimentRepository(postgres_session)
+    strategies = SQLAlchemyStrategyRepository(postgres_session)
+    datasets = SQLAlchemyDatasetRepository(postgres_session)
+    gates = SQLAlchemyGateRepository(postgres_session)
+    loader = LoadDatasetSnapshot(LocalParquetDatasetStorage(tmp_path), datasets)
+    derived = (
+        _derived_validation(
+            execution.experiment_run_id,
+            ValidationType.OUT_OF_SAMPLE,
+            {"scope": "held_out_fixture"},
+            MetricSet(
+                total_return=0.1,
+                sharpe=0.7,
+                max_drawdown=-0.2,
+                trade_count=30,
+            ),
+        ),
+        _derived_validation(
+            execution.experiment_run_id,
+            ValidationType.WALK_FORWARD,
+            {
+                "aggregate": {
+                    "profitable_fold_ratio": 0.7,
+                    "median_sharpe": 0.8,
+                    "sharpe_std_across_folds": 0.2,
+                    "benchmark_outperformance_ratio": 0.6,
+                }
+            },
+        ),
+        _derived_validation(
+            execution.experiment_run_id,
+            ValidationType.PARAMETER_SENSITIVITY,
+            {
+                "summary": {
+                    "profitable_combination_ratio": 0.8,
+                    "sharpe_dispersion": 0.2,
+                    "sharpe_neighbor_delta": 0.1,
+                }
+            },
+        ),
+        _derived_validation(
+            execution.experiment_run_id,
+            ValidationType.STRESS,
+            {
+                "aggregate": {
+                    "profitable_scenario_ratio": 0.8,
+                    "worst_total_return": 0.01,
+                    "worst_max_drawdown": -0.2,
+                },
+                "baseline": {"metrics": {"total_return": 0.1}},
+                "scenarios": [],
+            },
+        ),
+        _derived_validation(
+            execution.experiment_run_id,
+            ValidationType.MONTE_CARLO,
+            {
+                "distribution": {
+                    "empirical_loss_frequency": 0.2,
+                    "total_return_percentiles": {"p05": "-0.1"},
+                    "max_drawdown_percentiles": {"p05": "-0.2"},
+                    "max_losing_streak_percentiles": {"p95": "5"},
+                    "historical_total_return_percentile": 0.5,
+                }
+            },
+        ),
+    )
+    for validation in derived:
+        experiments.add_validation(validation)
+    RunAdversarialValidation(experiments, datasets, loader).execute(
+        execution.experiment_run_id, _adversarial_configuration()
+    )
+    validations = experiments.list_validations(execution.experiment_run_id)
+    adversarial = next(
+        item
+        for item in validations
+        if item.validation_type is ValidationType.ADVERSARIAL_REVIEW
+    )
+    evidence_ids = {item.validation_type: item.id for item in validations}
+    required = (
+        ValidationType.BACKTEST,
+        ValidationType.OUT_OF_SAMPLE,
+        ValidationType.WALK_FORWARD,
+        ValidationType.PARAMETER_SENSITIVITY,
+        ValidationType.STRESS,
+        ValidationType.MONTE_CARLO,
+    )
+    permissive = ValidationGatePolicy(
+        "HISTORICAL_TO_PAPER",
+        1,
+        "Permissive integration fixture",
+        required,
+        True,
+        (
+            GateRuleDefinition(GateRuleCode.MIN_OOS_SHARPE, 0.5),
+            GateRuleDefinition(GateRuleCode.MAX_OOS_DRAWDOWN, -0.25),
+            GateRuleDefinition(
+                GateRuleCode.MIN_WALK_FORWARD_PROFITABLE_FOLD_RATIO, 0.6
+            ),
+            GateRuleDefinition(GateRuleCode.MIN_PARAMETER_PROFITABLE_RATIO, 0.5),
+            GateRuleDefinition(GateRuleCode.MIN_STRESS_PROFITABLE_RATIO, 0.5),
+            GateRuleDefinition(GateRuleCode.MAX_MONTE_CARLO_LOSS_FREQUENCY, 0.3),
+            GateRuleDefinition(GateRuleCode.MAX_HIGH_ADVERSARIAL_FINDINGS, 10),
+        ),
+    )
+    evaluator = EvaluateValidationGate(experiments, strategies, datasets, gates, loader)
+    passed = evaluator.execute(execution.experiment_run_id, permissive, evidence_ids)
+    strict = ValidationGatePolicy(
+        permissive.policy_id,
+        2,
+        "Stricter integration fixture",
+        required,
+        True,
+        (GateRuleDefinition(GateRuleCode.MIN_OOS_SHARPE, 0.8),),
+    )
+    failed = evaluator.execute(execution.experiment_run_id, strict, evidence_ids)
+    experiments.add_validation(
+        _derived_validation(
+            execution.experiment_run_id,
+            ValidationType.OUT_OF_SAMPLE,
+            {"scope": "later_unselected_evidence"},
+            MetricSet(sharpe=0.1),
+        )
+    )
+
+    fresh_session = Session(bind=postgres_session.connection(), expire_on_commit=False)
+    try:
+        fresh_experiments = SQLAlchemyExperimentRepository(fresh_session)
+        fresh_strategies = SQLAlchemyStrategyRepository(fresh_session)
+        fresh_datasets = SQLAlchemyDatasetRepository(fresh_session)
+        fresh_gates = SQLAlchemyGateRepository(fresh_session)
+        fresh_loader = LoadDatasetSnapshot(
+            LocalParquetDatasetStorage(tmp_path), fresh_datasets
+        )
+        reproducer = ReproduceValidationGate(
+            fresh_experiments,
+            fresh_strategies,
+            fresh_datasets,
+            fresh_gates,
+            fresh_loader,
+        )
+        reproduced = reproducer.execute(passed.id)
+        stored = fresh_gates.list_for_run(execution.experiment_run_id)
+    finally:
+        fresh_session.close()
+
+    assert passed.decision is GateDecision.PASS
+    assert failed.decision is GateDecision.FAIL
+    assert reproduced.matches
+    assert reproduced.result == passed
+    assert len(stored) == 2
+    assert stored[0].fingerprint == passed.fingerprint
+    assert stored[0].source_evidence == passed.source_evidence
+    assert adversarial.id in {
+        source_id
+        for result in passed.rule_results
+        for source_id in result.source_validation_ids
+    }

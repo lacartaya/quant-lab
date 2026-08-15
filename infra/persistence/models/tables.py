@@ -205,6 +205,32 @@ class ValidationRunModel(Base):
     trade_count: Mapped[int | None] = mapped_column(Integer)
 
 
+class GateEvaluationModel(Base):
+    __tablename__ = "gate_evaluations"
+    __table_args__ = (
+        CheckConstraint(
+            "decision IN ('pass', 'fail')", name="ck_gate_evaluations_decision"
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(PostgreSQLUUID(as_uuid=True), primary_key=True)
+    experiment_run_id: Mapped[UUID] = mapped_column(
+        PostgreSQLUUID(as_uuid=True), ForeignKey("experiment_runs.id"), index=True
+    )
+    strategy_version_id: Mapped[UUID] = mapped_column(
+        PostgreSQLUUID(as_uuid=True), ForeignKey("strategy_versions.id"), index=True
+    )
+    policy_id: Mapped[str] = mapped_column(String(100), index=True)
+    policy_version: Mapped[int] = mapped_column(Integer)
+    decision: Mapped[str] = mapped_column(String(16))
+    rule_results: Mapped[list[dict[str, object]]] = mapped_column(JSONB)
+    source_evidence: Mapped[dict[str, object]] = mapped_column(JSONB)
+    policy: Mapped[dict[str, object]] = mapped_column(JSONB)
+    evaluator_version: Mapped[str] = mapped_column(String(100))
+    evaluated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    fingerprint: Mapped[str] = mapped_column(String(100))
+
+
 class PromotionDecisionModel(Base):
     __tablename__ = "promotion_decisions"
     __table_args__ = (

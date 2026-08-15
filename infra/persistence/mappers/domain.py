@@ -1,7 +1,10 @@
+from uuid import UUID
+
 from infra.persistence.models import (
     DatasetSnapshotModel,
     ExperimentModel,
     ExperimentRunModel,
+    GateEvaluationModel,
     HypothesisModel,
     PromotionDecisionModel,
     StrategyModel,
@@ -15,6 +18,9 @@ from quant.domain import (
     ExperimentRun,
     ExperimentRunStatus,
     ExperimentStatus,
+    GateDecision,
+    GateRuleOutcome,
+    GateRuleResult,
     Hypothesis,
     HypothesisStatus,
     MetricSet,
@@ -22,6 +28,7 @@ from quant.domain import (
     PromotionDecisionType,
     Strategy,
     StrategyVersion,
+    ValidationGateResult,
     ValidationRun,
     ValidationStatus,
     ValidationType,
@@ -248,6 +255,66 @@ def validation_from_model(value: ValidationRunModel) -> ValidationRun:
         configuration=value.configuration,
         created_at=value.created_at,
         completed_at=value.completed_at,
+    )
+
+
+def gate_evaluation_to_model(value: ValidationGateResult) -> GateEvaluationModel:
+    return GateEvaluationModel(
+        id=value.id,
+        experiment_run_id=value.experiment_run_id,
+        strategy_version_id=value.strategy_version_id,
+        policy_id=value.policy_id,
+        policy_version=value.policy_version,
+        decision=value.decision.value,
+        rule_results=[_gate_rule_to_json(item) for item in value.rule_results],
+        source_evidence=dict(value.source_evidence),
+        policy=dict(value.policy),
+        evaluator_version=value.evaluator_version,
+        evaluated_at=value.evaluated_at,
+        fingerprint=value.fingerprint,
+    )
+
+
+def gate_evaluation_from_model(value: GateEvaluationModel) -> ValidationGateResult:
+    return ValidationGateResult(
+        id=value.id,
+        experiment_run_id=value.experiment_run_id,
+        strategy_version_id=value.strategy_version_id,
+        policy_id=value.policy_id,
+        policy_version=value.policy_version,
+        decision=GateDecision(value.decision),
+        rule_results=tuple(_gate_rule_from_json(item) for item in value.rule_results),
+        source_evidence=value.source_evidence,
+        policy=value.policy,
+        evaluator_version=value.evaluator_version,
+        evaluated_at=value.evaluated_at,
+        fingerprint=value.fingerprint,
+    )
+
+
+def _gate_rule_to_json(value: GateRuleResult) -> dict[str, object]:
+    return {
+        "rule_code": value.rule_code,
+        "result": value.result.value,
+        "expected": value.expected,
+        "actual": value.actual,
+        "source_validation_ids": [str(item) for item in value.source_validation_ids],
+        "details": dict(value.details),
+    }
+
+
+def _gate_rule_from_json(value: dict[str, object]) -> GateRuleResult:
+    source_ids = value.get("source_validation_ids")
+    details = value.get("details")
+    if not isinstance(source_ids, list) or not isinstance(details, dict):
+        raise ValueError("persisted gate rule is invalid")
+    return GateRuleResult(
+        rule_code=str(value["rule_code"]),
+        result=GateRuleOutcome(str(value["result"])),
+        expected=value.get("expected"),
+        actual=value.get("actual"),
+        source_validation_ids=tuple(UUID(str(item)) for item in source_ids),
+        details=details,
     )
 
 

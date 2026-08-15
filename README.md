@@ -175,5 +175,15 @@ evidence. It reports structured, source-linked findings and explicit coverage
 gaps without rerunning experiments. Configured heuristics prioritize evidence;
 they are not promotion decisions, PASS/FAIL gates, scores, or AI-generated advice.
 
+## Validation gate
+
+Validation evidence describes strategy behavior. The deterministic validation
+gate decides whether one explicit evidence snapshot satisfies one specific,
+versioned advancement policy. Every requirement and threshold is auditable, all
+rules execute, and evaluations remain immutable when policies or evidence change.
+
+A PASS means policy eligibility. It is not proof of future profitability or
+safety, does not allocate capital, and does not start paper or live trading.
+
 All tests, including fast domain tests, can be run with `pytest`. If PostgreSQL
 is unavailable, integration tests are skipped while unit tests still run.
