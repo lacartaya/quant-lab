@@ -44,6 +44,10 @@ class SQLAlchemyExperimentRepository:
         self._session.add(experiment_run_to_model(run))
         self._session.flush()
 
+    def save_run(self, run: ExperimentRun) -> None:
+        self._session.merge(experiment_run_to_model(run))
+        self._session.flush()
+
     def get_run(self, run_id: UUID) -> ExperimentRun | None:
         row = self._session.get(ExperimentRunModel, run_id)
         return experiment_run_from_model(row) if row is not None else None

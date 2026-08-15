@@ -92,6 +92,7 @@ def strategy_version_to_model(value: StrategyVersion) -> StrategyVersionModel:
         strategy_id=value.strategy_id,
         version=value.version,
         git_commit=value.git_commit,
+        algorithm_key=value.algorithm_key,
         parameters=dict(value.parameters),
         created_at=value.created_at,
     )
@@ -103,6 +104,7 @@ def strategy_version_from_model(value: StrategyVersionModel) -> StrategyVersion:
         strategy_id=value.strategy_id,
         version=value.version,
         git_commit=value.git_commit,
+        algorithm_key=value.algorithm_key,
         parameters=value.parameters,
         created_at=value.created_at,
     )

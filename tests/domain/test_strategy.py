@@ -16,13 +16,34 @@ def test_strategy_construction() -> None:
     assert strategy.name == "Trend"
 
 
-def make_version(*, version: str = "1", git_commit: str = "abc123") -> StrategyVersion:
-    return StrategyVersion(uuid4(), uuid4(), version, git_commit, {"window": 20}, NOW)
+def make_version(
+    *,
+    version: str = "1",
+    git_commit: str = "abc123",
+    algorithm_key: str = "moving_average_trend",
+) -> StrategyVersion:
+    return StrategyVersion(
+        uuid4(),
+        uuid4(),
+        version,
+        git_commit,
+        algorithm_key,
+        {"window": 20},
+        NOW,
+    )
 
 
 def test_strategy_version_is_immutable_and_copies_parameters() -> None:
     parameters: dict[str, object] = {"window": 20}
-    version = StrategyVersion(uuid4(), uuid4(), "1", "abc123", parameters, NOW)
+    version = StrategyVersion(
+        uuid4(),
+        uuid4(),
+        "1",
+        "abc123",
+        "moving_average_trend",
+        parameters,
+        NOW,
+    )
     parameters["window"] = 50
     assert version.parameters["window"] == 20
     field_name = "version"
@@ -38,3 +59,8 @@ def test_strategy_version_requires_version_and_commit(
 ) -> None:
     with pytest.raises(ValueError):
         make_version(version=version, git_commit=commit)
+
+
+def test_strategy_version_requires_algorithm_key() -> None:
+    with pytest.raises(ValueError, match="algorithm_key"):
+        make_version(algorithm_key="")

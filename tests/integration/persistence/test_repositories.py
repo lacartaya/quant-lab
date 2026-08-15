@@ -99,7 +99,13 @@ def test_complete_research_lineage_round_trip(postgres_session: Session) -> None
 
     strategy = Strategy(uuid4(), "Trend", "Logical strategy", "trend", NOW)
     version = StrategyVersion(
-        uuid4(), strategy.id, "v1", "abc123", {"window": 20}, NOW
+        uuid4(),
+        strategy.id,
+        "v1",
+        "abc123",
+        "moving_average_trend",
+        {"window": 20},
+        NOW,
     )
     strategies.add(strategy)
     strategies.add_version(version)

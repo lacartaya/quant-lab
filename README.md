@@ -86,5 +86,30 @@ Open positions are marked to the final close rather than forcibly liquidated.
 The engine produces accounting and execution records only; it does not yet
 evaluate whether a strategy is good or calculate performance statistics.
 
+## Performance analytics
+
+Quant Lab now derives returns, drawdown, volatility, risk-adjusted ratios, and
+completed-trade metrics from deterministic backtest results. Annualization and
+the risk-free rate are explicit inputs. A comparable Buy & Hold benchmark enters
+at the first bar open using the same sizing and execution-cost assumptions.
+
+Metrics describe historical simulated performance. They do not constitute
+strategy validation or promotion. Exact `metrics-v1` conventions are documented
+in `docs/metrics.md`.
+
+## Experiment reproducibility
+
+The application layer can now resolve a persisted Experiment into its exact
+strategy version and immutable dataset snapshot, execute the backtest and
+analytics pipeline, and persist a BACKTEST validation with its material evidence.
+Behavioral inputs—including strategy parameters, costs, annualization, and all
+implementation versions—are stored with the ExperimentRun.
+
+The resulting flow is `Experiment → Run → deterministic evidence → persisted
+lineage → reproduce later`. Reproduction reloads the Parquet snapshot, verifies
+its checksum, reconstructs exclusively from persisted lineage, and compares a
+canonical SHA-256 material-result fingerprint. A result that cannot be reproduced
+is not considered valid research evidence.
+
 All tests, including fast domain tests, can be run with `pytest`. If PostgreSQL
 is unavailable, integration tests are skipped while unit tests still run.

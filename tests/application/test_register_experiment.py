@@ -25,6 +25,9 @@ class RecordingExperimentRepository:
     def add_run(self, run: ExperimentRun) -> None:
         raise NotImplementedError
 
+    def save_run(self, run: ExperimentRun) -> None:
+        raise NotImplementedError
+
     def get_run(self, run_id: UUID) -> ExperimentRun | None:
         return None
 

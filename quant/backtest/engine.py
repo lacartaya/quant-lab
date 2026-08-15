@@ -1,13 +1,15 @@
 from dataclasses import dataclass
 from datetime import datetime
-from decimal import Context, Decimal, localcontext
+from decimal import Decimal
 
 from quant.backtest.configuration import BacktestConfiguration
-from quant.backtest.execution import ExecutionSimulator
+from quant.backtest.execution import ExecutionSimulator, maximum_affordable_quantity
 from quant.backtest.models import EquityPoint, Fill, Order, OrderSide, Position, Trade
 from quant.backtest.portfolio import Portfolio
 from quant.domain import HistoricalDataset, Signal, SignalAction
 from quant.strategies import ExecutableStrategy
+
+BACKTEST_ENGINE_VERSION = "backtest-engine-v1"
 
 
 @dataclass(frozen=True, slots=True)
@@ -130,11 +132,12 @@ class BacktestEngine:
             side = OrderSide.SELL
         else:
             side = OrderSide.BUY
-            quantity = BacktestEngine._maximum_affordable_quantity(
-                portfolio.cash,
-                configuration.position_fraction,
-                reference_price,
-                configuration,
+            quantity = maximum_affordable_quantity(
+                cash=portfolio.cash,
+                fraction=configuration.position_fraction,
+                reference_price=reference_price,
+                fee_model=configuration.fee_model,
+                slippage_model=configuration.slippage_model,
             )
         if quantity == 0:
             return None
@@ -145,31 +148,3 @@ class BacktestEngine:
             quantity=quantity,
             reference_price=reference_price,
         )
-
-    @staticmethod
-    def _maximum_affordable_quantity(
-        cash: Decimal,
-        fraction: Decimal,
-        reference_price: Decimal,
-        configuration: BacktestConfiguration,
-    ) -> int:
-        fill_price = configuration.slippage_model.apply(
-            side=OrderSide.BUY, reference_price=reference_price
-        )
-        with localcontext(Context(prec=64)):
-            allocation = cash * fraction
-            high = int(allocation // fill_price)
-            low = 0
-            while low < high:
-                candidate = (low + high + 1) // 2
-                fees = configuration.fee_model.calculate(
-                    quantity=candidate, price=fill_price
-                )
-                if fees < 0:
-                    raise ValueError("fee model returned a negative fee")
-                cost = Decimal(candidate) * fill_price + fees
-                if cost <= allocation:
-                    low = candidate
-                else:
-                    high = candidate - 1
-            return low

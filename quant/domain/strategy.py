@@ -31,6 +31,7 @@ class StrategyVersion:
     strategy_id: UUID
     version: str
     git_commit: str
+    algorithm_key: str
     parameters: Mapping[str, object]
     created_at: datetime
 
@@ -39,5 +40,6 @@ class StrategyVersion:
         require_uuid(self.strategy_id, "strategy_id")
         require_text(self.version, "version")
         require_text(self.git_commit, "git_commit")
+        require_text(self.algorithm_key, "algorithm_key")
         object.__setattr__(self, "parameters", immutable_mapping(self.parameters))
         object.__setattr__(self, "created_at", as_utc(self.created_at, "created_at"))

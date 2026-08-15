@@ -69,6 +69,7 @@ class StrategyVersionModel(Base):
     )
     version: Mapped[str] = mapped_column(String(100))
     git_commit: Mapped[str] = mapped_column(String(255))
+    algorithm_key: Mapped[str] = mapped_column(String(100))
     parameters: Mapped[dict[str, object]] = mapped_column(JSONB)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
