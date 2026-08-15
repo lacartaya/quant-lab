@@ -164,7 +164,8 @@ class ValidationRunModel(Base):
     __table_args__ = (
         CheckConstraint(
             "validation_type IN ('backtest', 'out_of_sample', 'walk_forward', "
-            "'stress', 'monte_carlo', 'parameter_sensitivity')",
+            "'stress', 'monte_carlo', 'parameter_sensitivity', "
+            "'adversarial_review')",
             name="ck_validation_runs_type",
         ),
         CheckConstraint(

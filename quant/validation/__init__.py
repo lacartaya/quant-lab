@@ -1,5 +1,15 @@
 """Deterministic validation models and fold generation."""
 
+from quant.validation.adversarial import (
+    ADVERSARIAL_ANALYZER_VERSION,
+    AdversarialAnalysisConfiguration,
+    AdversarialFinding,
+    AdversarialSummary,
+    AdversarialValidationReport,
+    FindingCategory,
+    FindingSeverity,
+    analyze_adversarial_evidence,
+)
 from quant.validation.monte_carlo import (
     MAX_SIMULATION_COUNT,
     MIN_OBSERVATION_COUNT,
@@ -52,6 +62,13 @@ from quant.validation.walk_forward import (
 )
 
 __all__ = [
+    "ADVERSARIAL_ANALYZER_VERSION",
+    "AdversarialAnalysisConfiguration",
+    "AdversarialFinding",
+    "AdversarialSummary",
+    "AdversarialValidationReport",
+    "FindingCategory",
+    "FindingSeverity",
     "WalkForwardAggregate",
     "ParameterCandidateResult",
     "MAX_SIMULATION_COUNT",
@@ -82,6 +99,7 @@ __all__ = [
     "WalkForwardFoldResult",
     "WalkForwardMode",
     "aggregate_walk_forward",
+    "analyze_adversarial_evidence",
     "aggregate_stress_results",
     "compare_stress_result",
     "maximum_consecutive_losses",

@@ -17,11 +17,13 @@ from infra.persistence.repositories import (
 from quant.analytics import AnalyticsConfiguration
 from quant.application import DatasetIntegrityError, LoadDatasetSnapshot
 from quant.application.experiments import (
+    ReproduceAdversarialValidation,
     ReproduceExperiment,
     ReproduceMonteCarloValidation,
     ReproduceParameterSensitivityValidation,
     ReproduceStressValidation,
     ReproduceWalkForwardValidation,
+    RunAdversarialValidation,
     RunExperiment,
     RunMonteCarloValidation,
     RunParameterSensitivityValidation,
@@ -49,6 +51,7 @@ from quant.domain import (
     ValidationType,
 )
 from quant.validation import (
+    AdversarialAnalysisConfiguration,
     MonteCarloConfiguration,
     ParameterSensitivityConfiguration,
     ParameterSpaceTooLarge,
@@ -62,6 +65,29 @@ from quant.validation import (
 
 pytestmark = pytest.mark.integration
 NOW = datetime(2026, 8, 15, 10, tzinfo=UTC)
+
+
+def _adversarial_configuration() -> AdversarialAnalysisConfiguration:
+    return AdversarialAnalysisConfiguration(
+        max_oos_sharpe_drop=0.5,
+        max_oos_return_drop=0.1,
+        max_oos_drawdown_worsening=0.1,
+        min_profitable_fold_ratio=0.5,
+        max_fold_return_dispersion=0.2,
+        max_fold_sharpe_dispersion=0.5,
+        max_neighbor_sharpe_delta=0.75,
+        min_profitable_parameter_ratio=0.5,
+        max_parameter_sharpe_dispersion=0.5,
+        max_stress_return_drop=0.1,
+        max_stress_drawdown_worsening=0.1,
+        max_bootstrap_loss_frequency=0.25,
+        max_adverse_bootstrap_drawdown=-0.3,
+        max_bootstrap_losing_streak=8,
+        max_historical_return_percentile=0.95,
+        min_trade_count_for_interpretation=20,
+        max_top_trade_profit_share=0.7,
+        max_top_three_profit_share=0.9,
+    )
 
 
 def _bars() -> tuple[MarketBar, ...]:
@@ -310,9 +336,7 @@ def test_walk_forward_persists_and_reproduces_from_a_fresh_session(
             fresh_datasets,
             fresh_loader,
         ).execute(validation.validation_run_id)
-        persisted = fresh_experiments.list_validations(
-            execution.experiment_run_id
-        )
+        persisted = fresh_experiments.list_validations(execution.experiment_run_id)
     finally:
         fresh_session.close()
 
@@ -394,9 +418,7 @@ def test_parameter_sensitivity_preserves_strategy_and_reproduces_after_restart(
             fresh_datasets,
             fresh_loader,
         ).execute(sensitivity.validation_run_id)
-        persisted = fresh_experiments.list_validations(
-            execution.experiment_run_id
-        )
+        persisted = fresh_experiments.list_validations(execution.experiment_run_id)
     finally:
         fresh_session.close()
 
@@ -406,12 +428,12 @@ def test_parameter_sensitivity_preserves_strategy_and_reproduces_after_restart(
     assert reproduced.reproduced_fingerprint == sensitivity.fingerprint
     assert reproduced.result.analysis == sensitivity.analysis
     assert len(sensitivity.analysis.candidates) == 4
-    assert sum(
-        item.combination.is_baseline for item in sensitivity.analysis.candidates
-    ) == 1
+    assert (
+        sum(item.combination.is_baseline for item in sensitivity.analysis.candidates)
+        == 1
+    )
     assert all(
-        item.backtest_result.configuration
-        == execution.backtest_result.configuration
+        item.backtest_result.configuration == execution.backtest_result.configuration
         for item in sensitivity.analysis.candidates
     )
     assert [item.validation_type for item in persisted] == [
@@ -488,9 +510,7 @@ def test_stress_suite_is_cost_monotonic_and_reproduces_after_restart(
         ),
     )
     after_versions = strategies.list_versions(execution.strategy_version.strategy_id)
-    by_id = {
-        result.scenario.id: result for result in stress.analysis.scenario_results
-    }
+    by_id = {result.scenario.id: result for result in stress.analysis.scenario_results}
     assert (
         stress.analysis.baseline_backtest.final_equity
         >= by_id["STRESS-FEES-2X"].backtest_result.final_equity
@@ -516,9 +536,7 @@ def test_stress_suite_is_cost_monotonic_and_reproduces_after_restart(
             fresh_datasets,
             fresh_loader,
         ).execute(stress.validation_run_id)
-        persisted = fresh_experiments.list_validations(
-            execution.experiment_run_id
-        )
+        persisted = fresh_experiments.list_validations(execution.experiment_run_id)
     finally:
         fresh_session.close()
 
@@ -563,9 +581,7 @@ def test_monte_carlo_persists_compact_paths_and_reproduces_after_restart(
     experiments = SQLAlchemyExperimentRepository(postgres_session)
     datasets = SQLAlchemyDatasetRepository(postgres_session)
     loader = LoadDatasetSnapshot(LocalParquetDatasetStorage(tmp_path), datasets)
-    validation = RunMonteCarloValidation(
-        experiments, datasets, loader
-    ).execute(
+    validation = RunMonteCarloValidation(experiments, datasets, loader).execute(
         execution.experiment_run_id,
         MonteCarloConfiguration(
             simulation_count=100,
@@ -591,9 +607,7 @@ def test_monte_carlo_persists_compact_paths_and_reproduces_after_restart(
         reproduced = ReproduceMonteCarloValidation(
             fresh_experiments, fresh_datasets, fresh_loader
         ).execute(validation.validation_run_id)
-        persisted = fresh_experiments.list_validations(
-            execution.experiment_run_id
-        )
+        persisted = fresh_experiments.list_validations(execution.experiment_run_id)
     finally:
         fresh_session.close()
 
@@ -617,3 +631,59 @@ def test_monte_carlo_persists_compact_paths_and_reproduces_after_restart(
         ReproduceMonteCarloValidation(experiments, datasets, loader).execute(
             validation.validation_run_id
         )
+
+
+def test_adversarial_report_persists_sources_and_reproduces_after_restart(
+    postgres_session: Session, tmp_path: Path
+) -> None:
+    experiment = _persist_lineage(postgres_session, tmp_path)
+    runner, _ = _services(postgres_session, tmp_path)
+    execution = runner.execute(
+        experiment.id,
+        BacktestConfiguration(
+            Decimal("100"),
+            Decimal("1"),
+            PercentageFeeModel(Decimal("0.001")),
+            BasisPointsSlippageModel(Decimal("10")),
+        ),
+        AnalyticsConfiguration(252),
+    )
+    experiments = SQLAlchemyExperimentRepository(postgres_session)
+    datasets = SQLAlchemyDatasetRepository(postgres_session)
+    loader = LoadDatasetSnapshot(LocalParquetDatasetStorage(tmp_path), datasets)
+    source_before = experiments.list_validations(execution.experiment_run_id)
+
+    report = RunAdversarialValidation(experiments, datasets, loader).execute(
+        execution.experiment_run_id, _adversarial_configuration()
+    )
+    persisted = experiments.list_validations(execution.experiment_run_id)
+    adversarial = persisted[-1]
+    assert adversarial.validation_type is ValidationType.ADVERSARIAL_REVIEW
+    assert tuple(persisted[:-1]) == tuple(source_before)
+
+    fresh_session = Session(bind=postgres_session.connection(), expire_on_commit=False)
+    try:
+        fresh_experiments = SQLAlchemyExperimentRepository(fresh_session)
+        fresh_datasets = SQLAlchemyDatasetRepository(fresh_session)
+        fresh_loader = LoadDatasetSnapshot(
+            LocalParquetDatasetStorage(tmp_path), fresh_datasets
+        )
+        reproduced = ReproduceAdversarialValidation(
+            fresh_experiments, fresh_datasets, fresh_loader
+        ).execute(adversarial.id)
+    finally:
+        fresh_session.close()
+
+    assert reproduced.matches
+    assert reproduced.mismatches == ()
+    assert reproduced.report == report
+    assert reproduced.reproduced_fingerprint == report.fingerprint
+    assert report.coverage[ValidationType.BACKTEST]
+    assert not report.coverage[ValidationType.MONTE_CARLO]
+    assert all(
+        finding.source_validation_ids == ()
+        or set(finding.source_validation_ids).issubset(
+            set(report.generated_from_validation_ids)
+        )
+        for finding in report.findings
+    )

@@ -6,6 +6,7 @@ from datetime import datetime
 from decimal import Decimal
 from enum import Enum
 from typing import Any, cast
+from uuid import UUID
 
 from quant.analytics import BenchmarkResult
 from quant.backtest import BacktestResult
@@ -65,6 +66,8 @@ def canonical_value(value: object) -> object:
         return "0" if value == 0 else format(value.normalize(), "f")
     if isinstance(value, datetime):
         return value.isoformat(timespec="microseconds").replace("+00:00", "Z")
+    if isinstance(value, UUID):
+        return str(value)
     if isinstance(value, Enum):
         return canonical_value(value.value)
     if isinstance(value, Mapping):

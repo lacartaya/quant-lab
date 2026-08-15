@@ -1,5 +1,11 @@
 """Experiment execution and reproducibility application services."""
 
+from quant.application.experiments.adversarial import (
+    AdversarialLineageError,
+    AdversarialReproductionResult,
+    ReproduceAdversarialValidation,
+    RunAdversarialValidation,
+)
 from quant.application.experiments.models import (
     ExperimentExecutionResult,
     ReproductionResult,
@@ -47,6 +53,8 @@ from quant.application.experiments.walk_forward import (
 )
 
 __all__ = [
+    "AdversarialLineageError",
+    "AdversarialReproductionResult",
     "ExperimentExecutionResult",
     "ExperimentLineageError",
     "MonteCarloLineageError",
@@ -57,10 +65,12 @@ __all__ = [
     "ParameterSensitivityReproductionResult",
     "ParameterSensitivityValidationResult",
     "ReproduceExperiment",
+    "ReproduceAdversarialValidation",
     "ReproduceParameterSensitivityValidation",
     "ReproductionLineageError",
     "ReproductionResult",
     "RunExperiment",
+    "RunAdversarialValidation",
     "RunMonteCarloValidation",
     "RunParameterSensitivityValidation",
     "RunStressValidation",

@@ -19,6 +19,7 @@ class ValidationType(StrEnum):
     STRESS = "stress"
     MONTE_CARLO = "monte_carlo"
     PARAMETER_SENSITIVITY = "parameter_sensitivity"
+    ADVERSARIAL_REVIEW = "adversarial_review"
 
 
 class ValidationStatus(StrEnum):

@@ -164,5 +164,16 @@ independent validation evidence and can be reproduced after restart. They are
 conditional empirical bootstrap results—not future-price predictions or
 guarantees about future strategy performance.
 
+## Adversarial validation
+
+Adversarial validation does not ask, “How good does the strategy look?” It asks,
+“What evidence suggests the result may be fragile or misleading?”
+
+The deterministic analyzer consolidates already-persisted backtest, OOS,
+walk-forward, parameter-sensitivity, stress, Monte Carlo, trade, and benchmark
+evidence. It reports structured, source-linked findings and explicit coverage
+gaps without rerunning experiments. Configured heuristics prioritize evidence;
+they are not promotion decisions, PASS/FAIL gates, scores, or AI-generated advice.
+
 All tests, including fast domain tests, can be run with `pytest`. If PostgreSQL
 is unavailable, integration tests are skipped while unit tests still run.
