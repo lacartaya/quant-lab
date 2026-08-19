@@ -22,6 +22,16 @@ from infra.persistence.mappers.domain import (
     validation_from_model,
     validation_to_model,
 )
+from infra.persistence.mappers.paper import (
+    paper_observation_from_model,
+    paper_observation_to_model,
+    paper_participant_from_model,
+    paper_participant_to_model,
+    paper_session_from_model,
+    paper_session_to_model,
+    paper_snapshot_from_model,
+    paper_snapshot_to_model,
+)
 
 __all__ = [
     "dataset_from_model",
@@ -44,4 +54,12 @@ __all__ = [
     "strategy_version_to_model",
     "validation_from_model",
     "validation_to_model",
+    "paper_observation_from_model",
+    "paper_observation_to_model",
+    "paper_participant_from_model",
+    "paper_participant_to_model",
+    "paper_session_from_model",
+    "paper_session_to_model",
+    "paper_snapshot_from_model",
+    "paper_snapshot_to_model",
 ]

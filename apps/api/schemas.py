@@ -157,3 +157,71 @@ class DashboardSummaryResponse(BaseModel):
     high_findings: int
     warning_findings: int
     knowledge_by_status: dict[str, int]
+
+
+class CreatePaperSessionRequest(BaseModel):
+    dataset_snapshot_id: UUID
+    evaluation_start: datetime
+
+
+class AddPaperParticipantRequest(BaseModel):
+    gate_evaluation_id: UUID
+
+
+class PaperSessionResponse(BaseModel):
+    id: UUID
+    market: str
+    instrument: str
+    timeframe: str
+    provider_name: str
+    provider_version: str
+    dataset_snapshot_id: UUID
+    dataset_checksum: str
+    evaluation_start: datetime
+    status: str
+    started_at: datetime | None
+    completed_at: datetime | None
+    last_processed_at: datetime | None
+    last_error: str | None
+    created_at: datetime
+    participant_count: int
+
+
+class PaperParticipantResponse(BaseModel):
+    id: UUID
+    session_id: UUID
+    strategy_version_id: UUID
+    source_gate_evaluation_id: UUID
+    status: str
+    initial_capital: float
+    paper_engine_version: str
+    started_at: datetime | None
+    stopped_at: datetime | None
+    last_processed_at: datetime | None
+    last_successful_at: datetime | None
+    last_error: str | None
+    processed_bars: int
+    current_cash: float | None
+    current_equity: float | None
+    open_position: dict[str, Any] | None
+    latest_signal: dict[str, Any] | None
+    latest_fill: dict[str, Any] | None
+    metrics: dict[str, Any] | None
+
+
+class PaperSessionDetailResponse(BaseModel):
+    session: PaperSessionResponse
+    participants: list[PaperParticipantResponse]
+
+
+class PaperProcessingResponse(BaseModel):
+    session_id: UUID
+    observation_timestamp: datetime | None
+    processed_participant_ids: list[UUID]
+    duplicate: bool
+    completed: bool
+
+
+class PaperArtifactListResponse(BaseModel):
+    participant_id: UUID
+    items: list[dict[str, Any]]

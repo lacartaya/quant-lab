@@ -1,11 +1,16 @@
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 from typing import TypedDict, cast
 from unittest.mock import Mock
 from uuid import UUID
 
 from fastapi.testclient import TestClient
 
-from apps.api.dependencies import get_operator_queries
+from apps.api.dependencies import (
+    PaperServices,
+    get_operator_queries,
+    get_paper_services,
+)
 from apps.api.main import app
 from quant.application import (
     DashboardSummary,
@@ -28,6 +33,10 @@ from quant.domain import (
     Hypothesis,
     HypothesisStatus,
     MetricSet,
+    PaperParticipant,
+    PaperParticipantStatus,
+    PaperSession,
+    PaperSessionStatus,
     Strategy,
     StrategyVersion,
     ValidationGateResult,
@@ -258,6 +267,7 @@ def test_health_and_dashboard_smoke() -> None:
         dashboard = client.get("/dashboard/")
         assert dashboard.status_code == 200
         assert "Quant Lab" in dashboard.text
+        assert "Paper Arena" in dashboard.text
         assert "No gate evaluation" in client.get("/dashboard/app.js").text
     app.dependency_overrides.clear()
 
@@ -343,4 +353,71 @@ def test_hypothesis_knowledge_strategy_prior_art_and_summary_endpoints() -> None
         assert prior_art_result.status_code == 200
         assert prior_art_result.json()["duplicate_detected"] is True
         assert client.get("/api/v1/operator-summary").json()["failed_gates"] == 1
+    app.dependency_overrides.clear()
+
+
+def test_paper_arena_endpoints_expose_fake_portfolio_evidence() -> None:
+    session = PaperSession(
+        IDS[10],
+        "US_EQUITIES",
+        "SPY",
+        "1D",
+        AdjustmentPolicy.RAW,
+        "replay",
+        "replay-provider-v1",
+        IDS[3],
+        "sha256-fixture",
+        NOW,
+        (),
+        PaperSessionStatus.RUNNING,
+        NOW,
+        None,
+        NOW,
+        None,
+        NOW,
+    )
+    participant = PaperParticipant(
+        IDS[11],
+        session.id,
+        IDS[2],
+        IDS[8],
+        PaperParticipantStatus.ACTIVE,
+        Decimal("10000"),
+        {},
+        "paper-engine-v1",
+        NOW,
+        None,
+        NOW,
+        NOW,
+        None,
+        NOW,
+    )
+    repository = Mock()
+    repository.list_sessions.return_value = (session,)
+    repository.list_participants.return_value = (participant,)
+    repository.get_session.return_value = session
+    repository.get_participant.return_value = participant
+    repository.latest_snapshot.return_value = None
+    papers = PaperServices(
+        repository=repository,
+        create_session=Mock(),
+        add_participant=Mock(),
+        lifecycle=Mock(),
+        advance=Mock(),
+        compare=Mock(),
+    )
+    app.dependency_overrides[get_paper_services] = lambda: papers
+    with TestClient(app) as client:
+        listing = client.get("/api/v1/paper/sessions")
+        assert listing.status_code == 200
+        assert listing.json()[0]["provider_version"] == "replay-provider-v1"
+        detail = client.get(f"/api/v1/paper/sessions/{session.id}").json()
+        assert detail["participants"][0]["paper_engine_version"] == "paper-engine-v1"
+        assert detail["participants"][0]["current_equity"] is None
+        assert (
+            client.get(f"/api/v1/paper/participants/{participant.id}/orders").json()[
+                "items"
+            ]
+            == []
+        )
     app.dependency_overrides.clear()

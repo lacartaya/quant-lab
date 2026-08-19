@@ -261,6 +261,108 @@ class GateEvaluationModel(Base):
     fingerprint: Mapped[str] = mapped_column(String(100))
 
 
+class PaperSessionModel(Base):
+    __tablename__ = "paper_sessions"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('created', 'running', 'paused', 'completed', 'failed')",
+            name="ck_paper_sessions_status",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(PostgreSQLUUID(as_uuid=True), primary_key=True)
+    market: Mapped[str] = mapped_column(String(100), index=True)
+    instrument: Mapped[str] = mapped_column(String(100), index=True)
+    timeframe: Mapped[str] = mapped_column(String(50), index=True)
+    adjustment_policy: Mapped[str] = mapped_column(String(16))
+    provider_name: Mapped[str] = mapped_column(String(100))
+    provider_version: Mapped[str] = mapped_column(String(100))
+    dataset_snapshot_id: Mapped[UUID] = mapped_column(
+        PostgreSQLUUID(as_uuid=True), ForeignKey("dataset_snapshots.id"), index=True
+    )
+    dataset_checksum: Mapped[str] = mapped_column(String(255))
+    evaluation_start: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    warmup_bars: Mapped[list[dict[str, object]]] = mapped_column(JSONB)
+    status: Mapped[str] = mapped_column(String(16), index=True)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_error: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class PaperParticipantModel(Base):
+    __tablename__ = "paper_participants"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('pending', 'active', 'paused', 'stopped')",
+            name="ck_paper_participants_status",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(PostgreSQLUUID(as_uuid=True), primary_key=True)
+    session_id: Mapped[UUID] = mapped_column(
+        PostgreSQLUUID(as_uuid=True), ForeignKey("paper_sessions.id"), index=True
+    )
+    strategy_version_id: Mapped[UUID] = mapped_column(
+        PostgreSQLUUID(as_uuid=True), ForeignKey("strategy_versions.id"), index=True
+    )
+    source_gate_evaluation_id: Mapped[UUID] = mapped_column(
+        PostgreSQLUUID(as_uuid=True), ForeignKey("gate_evaluations.id"), index=True
+    )
+    status: Mapped[str] = mapped_column(String(16), index=True)
+    initial_capital: Mapped[str] = mapped_column(String(100))
+    execution_configuration: Mapped[dict[str, object]] = mapped_column(JSONB)
+    paper_engine_version: Mapped[str] = mapped_column(String(100))
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    stopped_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_successful_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_error: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class PaperObservationModel(Base):
+    __tablename__ = "paper_observations"
+    __table_args__ = (
+        UniqueConstraint(
+            "session_id", "timestamp", name="uq_paper_observation_identity"
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(PostgreSQLUUID(as_uuid=True), primary_key=True)
+    session_id: Mapped[UUID] = mapped_column(
+        PostgreSQLUUID(as_uuid=True), ForeignKey("paper_sessions.id"), index=True
+    )
+    timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    bar: Mapped[dict[str, object]] = mapped_column(JSONB)
+    content_checksum: Mapped[str] = mapped_column(String(100))
+    processed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class PaperSnapshotModel(Base):
+    __tablename__ = "paper_snapshots"
+    __table_args__ = (
+        UniqueConstraint(
+            "participant_id", "observation_id", name="uq_paper_snapshot_observation"
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(PostgreSQLUUID(as_uuid=True), primary_key=True)
+    participant_id: Mapped[UUID] = mapped_column(
+        PostgreSQLUUID(as_uuid=True), ForeignKey("paper_participants.id"), index=True
+    )
+    observation_id: Mapped[UUID] = mapped_column(
+        PostgreSQLUUID(as_uuid=True), ForeignKey("paper_observations.id"), index=True
+    )
+    observation_timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    processed_bar_count: Mapped[int] = mapped_column(Integer)
+    material_result: Mapped[dict[str, object]] = mapped_column(JSONB)
+    metrics: Mapped[dict[str, object]] = mapped_column(JSONB)
+    fingerprint: Mapped[str] = mapped_column(String(100))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
 class PromotionDecisionModel(Base):
     __tablename__ = "promotion_decisions"
     __table_args__ = (

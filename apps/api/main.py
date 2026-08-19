@@ -6,7 +6,7 @@ from fastapi import FastAPI, Query, Request
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from apps.api.dependencies import OperatorDependency
+from apps.api.dependencies import OperatorDependency, PaperDependency
 from apps.api.mappers import (
     experiment_detail,
     experiment_run,
@@ -19,6 +19,8 @@ from apps.api.mappers import (
     validation,
 )
 from apps.api.schemas import (
+    AddPaperParticipantRequest,
+    CreatePaperSessionRequest,
     DashboardSummaryResponse,
     ExperimentDetailResponse,
     ExperimentListResponse,
@@ -28,12 +30,23 @@ from apps.api.schemas import (
     HypothesisListResponse,
     KnowledgeListResponse,
     PageMetadata,
+    PaperArtifactListResponse,
+    PaperParticipantResponse,
+    PaperProcessingResponse,
+    PaperSessionDetailResponse,
+    PaperSessionResponse,
     PriorArtRequest,
     PriorArtResponse,
     ValidationResponse,
 )
-from quant.application import CheckPriorArt, OperatorResourceNotFound
-from quant.domain import ExperimentStatus, HypothesisStatus, ValidationType
+from quant.application import CheckPriorArt, OperatorResourceNotFound, PaperArenaError
+from quant.domain import (
+    ExperimentStatus,
+    HypothesisStatus,
+    PaperParticipant,
+    PaperSession,
+    ValidationType,
+)
 from quant.domain.knowledge import (
     KnowledgeQuery,
     PriorArtConfiguration,
@@ -53,6 +66,18 @@ async def not_found_handler(
 ) -> JSONResponse:
     del request
     return JSONResponse(status_code=404, content={"detail": str(error)})
+
+
+@app.exception_handler(LookupError)
+async def lookup_error_handler(request: Request, error: LookupError) -> JSONResponse:
+    del request
+    return JSONResponse(status_code=404, content={"detail": str(error)})
+
+
+@app.exception_handler(PaperArenaError)
+async def paper_error_handler(request: Request, error: PaperArenaError) -> JSONResponse:
+    del request
+    return JSONResponse(status_code=409, content={"detail": str(error)})
 
 
 @app.get("/health", tags=["health"])
@@ -281,6 +306,261 @@ def operator_summary(queries: OperatorDependency) -> DashboardSummaryResponse:
             key.value: value for key, value in summary.knowledge_by_status.items()
         },
     )
+
+
+def _paper_participant(
+    value: PaperParticipant, papers: PaperDependency
+) -> PaperParticipantResponse:
+    snapshot = papers.repository.latest_snapshot(value.id)
+    current_equity = None
+    current_cash = None
+    open_position = None
+    latest_fill = None
+    latest_signal = None
+    metrics = None
+    processed_bars = 0
+    if snapshot is not None:
+        processed_bars = snapshot.processed_bar_count
+        mapped_metrics = json_value(snapshot.metrics)
+        if isinstance(mapped_metrics, dict):
+            metrics = mapped_metrics
+        backtest = snapshot.material_result.get("backtest")
+        if isinstance(backtest, dict) and backtest.get("final_equity") is not None:
+            current_equity = float(str(backtest["final_equity"]))
+            current_cash = float(str(backtest["final_cash"]))
+            raw_position = backtest.get("open_position")
+            if isinstance(raw_position, dict):
+                open_position = raw_position
+            fills = backtest.get("fills")
+            if isinstance(fills, list) and fills and isinstance(fills[-1], dict):
+                latest_fill = fills[-1]
+        signals = snapshot.material_result.get("signals")
+        if isinstance(signals, list) and signals and isinstance(signals[-1], dict):
+            latest_signal = signals[-1]
+    return PaperParticipantResponse(
+        id=value.id,
+        session_id=value.session_id,
+        strategy_version_id=value.strategy_version_id,
+        source_gate_evaluation_id=value.source_gate_evaluation_id,
+        status=value.status.value,
+        initial_capital=float(value.initial_capital),
+        paper_engine_version=value.paper_engine_version,
+        started_at=value.started_at,
+        stopped_at=value.stopped_at,
+        last_processed_at=value.last_processed_at,
+        last_successful_at=value.last_successful_at,
+        last_error=value.last_error,
+        processed_bars=processed_bars,
+        current_cash=current_cash,
+        current_equity=current_equity,
+        open_position=open_position,
+        latest_signal=latest_signal,
+        latest_fill=latest_fill,
+        metrics=metrics,
+    )
+
+
+def _paper_session(
+    value: PaperSession, papers: PaperDependency
+) -> PaperSessionResponse:
+    return PaperSessionResponse(
+        id=value.id,
+        market=value.market,
+        instrument=value.instrument,
+        timeframe=value.timeframe,
+        provider_name=value.provider_name,
+        provider_version=value.provider_version,
+        dataset_snapshot_id=value.dataset_snapshot_id,
+        dataset_checksum=value.dataset_checksum,
+        evaluation_start=value.evaluation_start,
+        status=value.status.value,
+        started_at=value.started_at,
+        completed_at=value.completed_at,
+        last_processed_at=value.last_processed_at,
+        last_error=value.last_error,
+        created_at=value.created_at,
+        participant_count=len(papers.repository.list_participants(value.id)),
+    )
+
+
+@app.get(
+    "/api/v1/paper/sessions", response_model=list[PaperSessionResponse], tags=["paper"]
+)
+def list_paper_sessions(papers: PaperDependency) -> list[PaperSessionResponse]:
+    return [_paper_session(item, papers) for item in papers.repository.list_sessions()]
+
+
+@app.post("/api/v1/paper/sessions", response_model=PaperSessionResponse, tags=["paper"])
+def create_paper_session(
+    request: CreatePaperSessionRequest, papers: PaperDependency
+) -> PaperSessionResponse:
+    return _paper_session(
+        papers.create_session.execute(
+            request.dataset_snapshot_id, request.evaluation_start
+        ),
+        papers,
+    )
+
+
+@app.get(
+    "/api/v1/paper/sessions/{session_id}",
+    response_model=PaperSessionDetailResponse,
+    tags=["paper"],
+)
+def get_paper_session(
+    session_id: UUID, papers: PaperDependency
+) -> PaperSessionDetailResponse:
+    session = papers.repository.get_session(session_id)
+    if session is None:
+        raise LookupError(f"paper session {session_id} was not found")
+    participants = papers.repository.list_participants(session_id)
+    return PaperSessionDetailResponse(
+        session=_paper_session(session, papers),
+        participants=[_paper_participant(item, papers) for item in participants],
+    )
+
+
+@app.post(
+    "/api/v1/paper/sessions/{session_id}/participants",
+    response_model=PaperParticipantResponse,
+    tags=["paper"],
+)
+def add_paper_participant(
+    session_id: UUID,
+    request: AddPaperParticipantRequest,
+    papers: PaperDependency,
+) -> PaperParticipantResponse:
+    return _paper_participant(
+        papers.add_participant.execute(session_id, request.gate_evaluation_id), papers
+    )
+
+
+@app.post(
+    "/api/v1/paper/sessions/{session_id}/start",
+    response_model=PaperSessionResponse,
+    tags=["paper"],
+)
+def start_paper_session(
+    session_id: UUID, papers: PaperDependency
+) -> PaperSessionResponse:
+    return _paper_session(papers.lifecycle.start_session(session_id), papers)
+
+
+@app.post(
+    "/api/v1/paper/sessions/{session_id}/pause",
+    response_model=PaperSessionResponse,
+    tags=["paper"],
+)
+def pause_paper_session(
+    session_id: UUID, papers: PaperDependency
+) -> PaperSessionResponse:
+    return _paper_session(papers.lifecycle.pause_session(session_id), papers)
+
+
+@app.post(
+    "/api/v1/paper/sessions/{session_id}/process-next",
+    response_model=PaperProcessingResponse,
+    tags=["paper"],
+)
+def process_next_replay_bar(
+    session_id: UUID, papers: PaperDependency
+) -> PaperProcessingResponse:
+    result = papers.advance.execute(session_id)
+    return PaperProcessingResponse(
+        session_id=result.session.id,
+        observation_timestamp=(
+            result.observation.bar.timestamp if result.observation else None
+        ),
+        processed_participant_ids=[item.participant_id for item in result.snapshots],
+        duplicate=result.duplicate,
+        completed=result.completed,
+    )
+
+
+@app.get(
+    "/api/v1/paper/participants/{participant_id}",
+    response_model=PaperParticipantResponse,
+    tags=["paper"],
+)
+def get_paper_participant(
+    participant_id: UUID, papers: PaperDependency
+) -> PaperParticipantResponse:
+    participant = papers.repository.get_participant(participant_id)
+    if participant is None:
+        raise LookupError(f"paper participant {participant_id} was not found")
+    return _paper_participant(participant, papers)
+
+
+@app.post(
+    "/api/v1/paper/participants/{participant_id}/pause",
+    response_model=PaperParticipantResponse,
+    tags=["paper"],
+)
+def pause_paper_participant(
+    participant_id: UUID, papers: PaperDependency
+) -> PaperParticipantResponse:
+    return _paper_participant(
+        papers.lifecycle.pause_participant(participant_id), papers
+    )
+
+
+@app.post(
+    "/api/v1/paper/participants/{participant_id}/stop",
+    response_model=PaperParticipantResponse,
+    tags=["paper"],
+)
+def stop_paper_participant(
+    participant_id: UUID, papers: PaperDependency
+) -> PaperParticipantResponse:
+    return _paper_participant(papers.lifecycle.stop_participant(participant_id), papers)
+
+
+def _paper_artifacts(
+    participant_id: UUID, key: str, papers: PaperDependency
+) -> PaperArtifactListResponse:
+    if papers.repository.get_participant(participant_id) is None:
+        raise LookupError(f"paper participant {participant_id} was not found")
+    snapshot = papers.repository.latest_snapshot(participant_id)
+    items: list[dict[str, Any]] = []
+    if snapshot is not None:
+        backtest = snapshot.material_result.get("backtest")
+        raw = backtest.get(key) if isinstance(backtest, dict) else None
+        if isinstance(raw, list):
+            items = [item for item in raw if isinstance(item, dict)]
+    return PaperArtifactListResponse(participant_id=participant_id, items=items)
+
+
+@app.get(
+    "/api/v1/paper/participants/{participant_id}/orders",
+    response_model=PaperArtifactListResponse,
+    tags=["paper"],
+)
+def get_paper_orders(
+    participant_id: UUID, papers: PaperDependency
+) -> PaperArtifactListResponse:
+    return _paper_artifacts(participant_id, "orders", papers)
+
+
+@app.get(
+    "/api/v1/paper/participants/{participant_id}/trades",
+    response_model=PaperArtifactListResponse,
+    tags=["paper"],
+)
+def get_paper_trades(
+    participant_id: UUID, papers: PaperDependency
+) -> PaperArtifactListResponse:
+    return _paper_artifacts(participant_id, "trades", papers)
+
+
+@app.get(
+    "/api/v1/paper/participants/{participant_id}/metrics",
+    response_model=PaperParticipantResponse,
+    tags=["paper"],
+)
+def get_paper_metrics(
+    participant_id: UUID, papers: PaperDependency
+) -> PaperParticipantResponse:
+    return get_paper_participant(participant_id, papers)
 
 
 _dashboard = Path(__file__).resolve().parents[1] / "dashboard"

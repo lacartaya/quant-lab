@@ -220,5 +220,19 @@ prior-art checks can identify exact duplicates and materially similar work.
 `REJECTED` does not mean universally invalid. It applies to the recorded market,
 instrument, timeframe, period, parameters, costs, and validation evidence.
 
+## Paper Arena
+
+Historical validation uses stored historical data. Paper Arena consumes
+forward-only observations and simulates orders, fills, and independent portfolios
+with fake capital. Admission requires an immutable passing
+`HISTORICAL_TO_PAPER` gate evaluation; passing historical validation never
+authorizes real-money execution.
+
+After starting the API, open `http://127.0.0.1:8000/dashboard/`. The versioned
+`/api/v1/paper` endpoints create a replay session, admit a gate-eligible
+participant, start or pause a session, and safely advance one replay bar with
+`POST /api/v1/paper/sessions/{session_id}/process-next`. The dashboard displays
+paper sessions, maturity, and side-by-side evidence without declaring a winner.
+
 All tests, including fast domain tests, can be run with `pytest`. If PostgreSQL
 is unavailable, integration tests are skipped while unit tests still run.

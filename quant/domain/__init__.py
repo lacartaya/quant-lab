@@ -32,6 +32,15 @@ from quant.domain.knowledge import (
     ResearchSignature,
 )
 from quant.domain.market_data import HistoricalDataRequest, HistoricalDataset, MarketBar
+from quant.domain.paper import (
+    PaperObservation,
+    PaperParticipant,
+    PaperParticipantComparison,
+    PaperParticipantStatus,
+    PaperSession,
+    PaperSessionStatus,
+    PaperSnapshot,
+)
 from quant.domain.promotion import PromotionDecision, PromotionDecisionType
 from quant.domain.signal import Signal, SignalAction
 from quant.domain.strategy import Strategy, StrategyVersion
@@ -72,6 +81,13 @@ __all__ = [
     "ResearchSignature",
     "MarketBar",
     "MetricSet",
+    "PaperObservation",
+    "PaperParticipant",
+    "PaperParticipantComparison",
+    "PaperParticipantStatus",
+    "PaperSession",
+    "PaperSessionStatus",
+    "PaperSnapshot",
     "PromotionDecision",
     "PromotionDecisionType",
     "Signal",
