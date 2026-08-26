@@ -47,6 +47,10 @@ from quant.application.experiments import (
     WalkForwardReproductionResult,
     WalkForwardValidationResult,
 )
+from quant.application.import_historical_dataset import (
+    HistoricalDatasetImportResult,
+    ImportHistoricalDataset,
+)
 from quant.application.operator_queries import (
     DashboardSummary,
     ExperimentDetail,
@@ -60,6 +64,7 @@ from quant.application.paper_arena import (
     PAPER_ENGINE_VERSION,
     REPLAY_PROVIDER_VERSION,
     AddPaperParticipant,
+    AdvanceLiveSession,
     AdvanceReplaySession,
     ComparePaperParticipants,
     CreatePaperSession,
@@ -113,12 +118,15 @@ __all__ = [
     "ExperimentDetail",
     "ExperimentSummary",
     "HypothesisDetail",
+    "HistoricalDatasetImportResult",
+    "ImportHistoricalDataset",
     "OperatorQueries",
     "OperatorResourceNotFound",
     "PAPER_ENGINE_VERSION",
     "REPLAY_PROVIDER_VERSION",
     "HISTORICAL_TO_PAPER_POLICY",
     "AddPaperParticipant",
+    "AdvanceLiveSession",
     "AdvanceReplaySession",
     "ComparePaperParticipants",
     "CreatePaperSession",

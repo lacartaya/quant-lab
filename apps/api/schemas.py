@@ -1,5 +1,6 @@
 from datetime import datetime
-from typing import Any
+from decimal import Decimal
+from typing import Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -9,6 +10,40 @@ class PageMetadata(BaseModel):
     limit: int
     offset: int
     returned: int
+
+
+class DatasetSnapshotResponse(BaseModel):
+    id: UUID
+    provider: str
+    feed: str | None
+    market: str
+    instrument: str
+    timeframe: str
+    requested_start_at: datetime
+    requested_end_at: datetime
+    actual_start_at: datetime | None = None
+    actual_end_at: datetime | None = None
+    bar_count: int | None = None
+    adjustment_policy: str
+    checksum: str
+    storage_location: str
+    created_at: datetime
+
+
+class DatasetSnapshotListResponse(BaseModel):
+    items: list[DatasetSnapshotResponse]
+    page: PageMetadata
+
+
+class HistoricalImportRequest(BaseModel):
+    provider: Literal["ALPACA"] = "ALPACA"
+    instrument: str
+    market: str = "US_EQUITIES"
+    timeframe: Literal["1Day", "1Min"] = "1Day"
+    start: datetime
+    end: datetime
+    feed: Literal["iex"] = "iex"
+    adjustment_policy: Literal["raw", "adjusted", "RAW", "ADJUSTED"] = "raw"
 
 
 class ExperimentSummaryResponse(BaseModel):
@@ -162,6 +197,7 @@ class DashboardSummaryResponse(BaseModel):
 class CreatePaperSessionRequest(BaseModel):
     dataset_snapshot_id: UUID
     evaluation_start: datetime
+    feed_mode: Literal["replay", "alpaca_iex"] = "replay"
 
 
 class AddPaperParticipantRequest(BaseModel):
@@ -185,6 +221,7 @@ class PaperSessionResponse(BaseModel):
     last_error: str | None
     created_at: datetime
     participant_count: int
+    execution_mode: Literal["internal_paper"] = "internal_paper"
 
 
 class PaperParticipantResponse(BaseModel):
@@ -225,3 +262,65 @@ class PaperProcessingResponse(BaseModel):
 class PaperArtifactListResponse(BaseModel):
     participant_id: UUID
     items: list[dict[str, Any]]
+
+
+class AlpacaPaperAccountResponse(BaseModel):
+    account_id: str
+    account_number: str
+    status: str
+    currency: str
+    cash: Decimal
+    buying_power: Decimal
+    equity: Decimal
+    portfolio_value: Decimal
+    trading_blocked: bool
+    pattern_day_trader: bool
+    simulated: bool
+
+
+class SubmitAlpacaPaperOrderRequest(BaseModel):
+    symbol: str
+    quantity: Decimal = Field(gt=0)
+    side: Literal["buy", "sell", "BUY", "SELL"]
+    type: Literal["market", "MARKET"] = "market"
+    time_in_force: Literal["day", "DAY"] = "day"
+    client_order_id: str = Field(min_length=1, max_length=128)
+
+
+class AlpacaPaperOrderResponse(BaseModel):
+    order_id: str
+    client_order_id: str
+    symbol: str
+    side: str
+    order_type: str
+    time_in_force: str
+    status: str
+    quantity: Decimal
+    filled_quantity: Decimal
+    filled_average_price: Decimal | None
+    submitted_at: datetime | None
+    filled_at: datetime | None
+    simulated: bool
+
+
+class AlpacaPaperPositionResponse(BaseModel):
+    symbol: str
+    quantity: Decimal
+    average_entry_price: Decimal
+    market_value: Decimal
+    current_price: Decimal
+    unrealized_pnl: Decimal
+    unrealized_pnl_percent: Decimal
+    simulated: bool
+
+
+class AlpacaPaperFillResponse(BaseModel):
+    activity_id: str
+    order_id: str
+    symbol: str
+    side: str
+    quantity: Decimal
+    price: Decimal
+    transaction_time: datetime
+    activity_type: str
+    simulated: bool

@@ -1,0 +1,5 @@
+meta { name: Submit small SPY PAPER BUY type: http seq: 3 }
+post { url: {{baseUrl}}/api/v1/brokers/alpaca/paper/orders body: json auth: none }
+body:json { {"symbol":"SPY","side":"buy","quantity":1,"type":"market","time_in_force":"day","client_order_id":"quant-lab-bruno-paper-001"} }
+script:post-response { if (res.status === 201) bru.setEnvVar("orderId", res.body.order_id); }
+tests { test("paper order accepted by API", function () { expect(res.status).to.equal(201); expect(res.body.simulated).to.equal(true); }); }

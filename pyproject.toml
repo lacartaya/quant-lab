@@ -32,7 +32,10 @@ include = ["apps*", "infra*", "quant*"]
 [tool.pytest.ini_options]
 addopts = "--strict-config --strict-markers"
 testpaths = ["tests"]
-markers = ["integration: requires a running PostgreSQL database"]
+markers = [
+    "integration: requires a running PostgreSQL database",
+    "alpaca_integration: opt-in read-only Alpaca PAPER/BASIC check",
+]
 
 [tool.coverage.run]
 source = ["quant"]

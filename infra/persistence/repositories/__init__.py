@@ -1,3 +1,6 @@
+from infra.persistence.repositories.alpaca_paper_repository import (
+    SQLAlchemyAlpacaPaperOrderRepository,
+)
 from infra.persistence.repositories.dataset_repository import (
     SQLAlchemyDatasetRepository,
 )
@@ -18,6 +21,7 @@ from infra.persistence.repositories.strategy_repository import (
 
 __all__ = [
     "SQLAlchemyDatasetRepository",
+    "SQLAlchemyAlpacaPaperOrderRepository",
     "SQLAlchemyExperimentRepository",
     "SQLAlchemyGateRepository",
     "SQLAlchemyHypothesisRepository",

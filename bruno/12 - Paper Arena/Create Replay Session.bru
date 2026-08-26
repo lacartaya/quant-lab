@@ -1,0 +1,4 @@
+meta { name: Create REPLAY internal paper session type: http seq: 2 }
+post { url: {{baseUrl}}/api/v1/paper/sessions body: json auth: none }
+body:json { {"dataset_snapshot_id":"{{snapshotId}}","evaluation_start":"2026-01-01T00:00:00Z","feed_mode":"replay"} }
+script:post-response { if (res.status === 200) bru.setEnvVar("sessionId", res.body.id); }

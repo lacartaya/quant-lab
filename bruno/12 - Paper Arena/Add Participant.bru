@@ -1,0 +1,4 @@
+meta { name: Add gate-eligible participant type: http seq: 5 }
+post { url: {{baseUrl}}/api/v1/paper/sessions/{{sessionId}}/participants body: json auth: none }
+body:json { {"gate_evaluation_id":"{{gateId}}"} }
+script:post-response { if (res.status === 200) bru.setEnvVar("participantId", res.body.id); }

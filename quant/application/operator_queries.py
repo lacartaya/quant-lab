@@ -76,6 +76,16 @@ class OperatorQueries:
     gates: GateRepository
     knowledge: KnowledgeRepository
 
+    def list_datasets(
+        self, *, limit: int = 50, offset: int = 0
+    ) -> tuple[DatasetSnapshot, ...]:
+        return tuple(self.datasets.list_all()[offset : offset + limit])
+
+    def dataset(self, snapshot_id: UUID) -> DatasetSnapshot:
+        return self._required(
+            self.datasets.get(snapshot_id), "dataset snapshot", snapshot_id
+        )
+
     def list_experiments(
         self,
         *,

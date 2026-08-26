@@ -2,7 +2,8 @@
 
 Quant Lab is an AI-assisted platform for quantitative research and validation.
 This repository provides deterministic strategy research, validation, research
-memory, and a local operator interface. It does not provide live trading.
+memory, a local operator interface, Alpaca Basic market data, and simulated
+paper trading. It does not provide real-money/live brokerage execution.
 
 ## Prerequisites
 
@@ -26,6 +27,9 @@ Copy the example environment configuration when local services need it:
 ```bash
 cp .env.example .env
 ```
+
+For Alpaca, add only PAPER credentials to the explicit `ALPACA_PAPER_*`
+variables. The application rejects Alpaca's live trading URL.
 
 `DATASET_STORAGE_PATH` selects the local root for immutable Parquet snapshots and
 defaults to `./data/snapshots`. PostgreSQL stores snapshot metadata; each snapshot
@@ -69,12 +73,23 @@ For containerized local operation:
 docker compose up --build postgres api
 ```
 
-The read-oriented interface supports experiment and lineage inspection,
+The interface supports experiment and lineage inspection,
 validation and benchmark evidence, adversarial findings, gate decisions,
-hypothesis and research-memory queries, and structured prior-art checks. The
-dashboard has no trading controls and cannot edit authoritative metrics,
-findings, or gate results. It is intended for local/internal use; authentication
-and public deployment are not included.
+hypothesis and research-memory queries, structured prior-art checks, Alpaca
+historical import, internal Paper Arena operations, and explicitly simulated
+Alpaca Paper actions. It cannot edit authoritative metrics, findings, or gate
+results and has no live-money controls. It is intended for local/internal use;
+authentication and public deployment are not included.
+
+Documentation:
+
+- [Documentation index](docs/index.md)
+- [Functional user guide](docs/user-guide.md)
+- [Alpaca Basic and Paper guide](docs/alpaca-paper-guide.md)
+- [Complete curl guide](docs/api-curl-guide.md)
+- [Bruno collection](bruno/README.md)
+- Interactive OpenAPI: `http://127.0.0.1:8000/docs`
+- Dashboard: `http://127.0.0.1:8000/dashboard/`
 
 Run PostgreSQL integration tests after starting the service and applying the
 migration:
@@ -233,6 +248,19 @@ After starting the API, open `http://127.0.0.1:8000/dashboard/`. The versioned
 participant, start or pause a session, and safely advance one replay bar with
 `POST /api/v1/paper/sessions/{session_id}/process-next`. The dashboard displays
 paper sessions, maturity, and side-by-side evidence without declaring a winner.
+
+## Alpaca Basic data and Paper brokerage
+
+Quant Lab can import single-symbol daily US-equity/ETF bars from Alpaca's IEX
+feed into the same immutable Parquet DatasetSnapshot workflow used by CSV data.
+It can also inspect and deliberately operate an Alpaca PAPER account through
+PAPER-named API and dashboard controls. Alpaca-forward Paper Arena sessions use
+IEX observations with Quant Lab's internal fake fills; they do not route strategy
+orders to Alpaca automatically.
+
+Alpaca Basic IEX coverage is not the consolidated US SIP feed, and Alpaca paper
+fills remain simulations. No configuration switch, endpoint, adapter, or UI
+control can send a real-money Alpaca order.
 
 All tests, including fast domain tests, can be run with `pytest`. If PostgreSQL
 is unavailable, integration tests are skipped while unit tests still run.

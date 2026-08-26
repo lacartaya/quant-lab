@@ -12,6 +12,11 @@ Admission requires `PASS` from the exact `HISTORICAL_TO_PAPER` gate evaluation. 
 
 `replay-provider-v1` emits eligible bars in timestamp order and has no future-bar lookup. Evaluation receives warm-up bars and only observations emitted so far. A close signal at bar `t` fills no earlier than the next emitted bar's open, matching historical timing. Warm-up performance is excluded and data gaps are not filled.
 
+An `alpaca_iex` session may instead poll the latest external one-minute IEX bar
+through `AlpacaLiveMarketDataProvider`. It requires a compatible one-minute
+warm-up DatasetSnapshot. This changes the observation source only: fills remain
+Quant Lab internal simulations and strategy orders are not routed to Alpaca.
+
 ## Persistence and recovery
 
 PostgreSQL stores sessions, participants, shared observations, and append-only cumulative snapshots. Snapshots contain simulated orders, fills, trades, equity, metrics, and deterministic fingerprints.
@@ -30,4 +35,7 @@ Metrics reuse deterministic analytics and retain `None` when undefined. Comparis
 
 ## Safety boundary
 
-There is no broker integration, live-order route, real capital, production promotion, or manual metric/gate override. Historical eligibility permits simulated paper admission only.
+Alpaca Paper brokerage is a separate external simulator and is always labeled
+PAPER. There is no live-money broker adapter, live-order route, real capital,
+production promotion, or manual metric/gate override. Historical eligibility
+permits simulated paper admission only.

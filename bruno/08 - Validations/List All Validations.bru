@@ -1,0 +1,3 @@
+meta { name: List all run validations type: http seq: 1 }
+get { url: {{baseUrl}}/api/v1/experiment-runs/{{runId}}/validations body: none auth: none }
+tests { test("listed", function () { expect(res.status).to.equal(200); }); }

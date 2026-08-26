@@ -21,10 +21,19 @@ services:
       POSTGRES_PORT: 5432
       API_HOST: 0.0.0.0
       API_PORT: 8000
+      DATASET_STORAGE_PATH: /app/data/snapshots
+      ALPACA_PAPER_API_KEY: ${ALPACA_PAPER_API_KEY:-}
+      ALPACA_PAPER_API_SECRET: ${ALPACA_PAPER_API_SECRET:-}
+      ALPACA_PAPER_BASE_URL: ${ALPACA_PAPER_BASE_URL:-https://paper-api.alpaca.markets}
+      ALPACA_MARKET_DATA_BASE_URL: ${ALPACA_MARKET_DATA_BASE_URL:-https://data.alpaca.markets}
+      ALPACA_MARKET_DATA_FEED: ${ALPACA_MARKET_DATA_FEED:-iex}
     ports:
       - "${API_PORT:-8000}:8000"
     depends_on:
       - postgres
+    volumes:
+      - dataset_snapshots:/app/data/snapshots
 
 volumes:
   postgres_data:
+  dataset_snapshots:

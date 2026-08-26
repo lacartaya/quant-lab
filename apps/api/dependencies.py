@@ -1,10 +1,17 @@
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from typing import Annotated
+from uuid import UUID
 
 from fastapi import Depends
 from sqlalchemy.orm import Session
 
+from infra.alpaca import (
+    AlpacaHistoricalMarketDataProvider,
+    AlpacaHTTPClient,
+    AlpacaPaperBrokerAdapter,
+    AlpacaPaperConfiguration,
+)
 from infra.market_data import (
     LocalParquetDatasetStorage,
     ReplayMarketDataProvider,
@@ -12,6 +19,7 @@ from infra.market_data import (
 )
 from infra.persistence.database import create_database_engine, create_session_factory
 from infra.persistence.repositories import (
+    SQLAlchemyAlpacaPaperOrderRepository,
     SQLAlchemyDatasetRepository,
     SQLAlchemyExperimentRepository,
     SQLAlchemyGateRepository,
@@ -22,14 +30,19 @@ from infra.persistence.repositories import (
 )
 from quant.application import (
     AddPaperParticipant,
+    AdvanceLiveSession,
     AdvanceReplaySession,
     ComparePaperParticipants,
+    CreateDatasetSnapshot,
     CreatePaperSession,
+    ImportHistoricalDataset,
     LoadDatasetSnapshot,
     OperatorQueries,
     PaperLifecycle,
     ProcessPaperBar,
 )
+from quant.domain import HistoricalDataset
+from quant.ports import DatasetRepository
 
 _engine = create_database_engine()
 _sessions = create_session_factory(_engine)
@@ -62,6 +75,27 @@ OperatorDependency = Annotated[OperatorQueries, Depends(get_operator_queries)]
 
 
 @dataclass(frozen=True, slots=True)
+class DatasetServices:
+    repository: DatasetRepository
+    loader: Callable[[UUID], HistoricalDataset]
+
+
+def get_dataset_services(
+    session: Annotated[Session, Depends(get_session)],
+) -> DatasetServices:
+    repository = SQLAlchemyDatasetRepository(session)
+    return DatasetServices(
+        repository,
+        LoadDatasetSnapshot(
+            LocalParquetDatasetStorage(dataset_storage_path()), repository
+        ),
+    )
+
+
+DatasetDependency = Annotated[DatasetServices, Depends(get_dataset_services)]
+
+
+@dataclass(frozen=True, slots=True)
 class PaperServices:
     repository: SQLAlchemyPaperRepository
     create_session: CreatePaperSession
@@ -69,6 +103,7 @@ class PaperServices:
     lifecycle: PaperLifecycle
     advance: AdvanceReplaySession
     compare: ComparePaperParticipants
+    advance_live: AdvanceLiveSession | None = None
 
 
 def get_paper_services(
@@ -96,8 +131,48 @@ def get_paper_services(
             processor,
             lambda dataset, after: ReplayMarketDataProvider(dataset, after=after),
         ),
+        advance_live=AdvanceLiveSession(papers, processor),
         compare=ComparePaperParticipants(papers),
     )
 
 
 PaperDependency = Annotated[PaperServices, Depends(get_paper_services)]
+
+
+@dataclass(frozen=True, slots=True)
+class AlpacaServices:
+    client: AlpacaHTTPClient
+    broker: AlpacaPaperBrokerAdapter
+    historical_import: ImportHistoricalDataset
+
+
+def get_alpaca_services(
+    session: Annotated[Session, Depends(get_session)],
+) -> Iterator[AlpacaServices]:
+    configuration = AlpacaPaperConfiguration.from_environment()
+    client = AlpacaHTTPClient.create(configuration)
+    datasets = SQLAlchemyDatasetRepository(session)
+    storage = LocalParquetDatasetStorage(dataset_storage_path())
+    loader = LoadDatasetSnapshot(storage, datasets)
+    try:
+        yield AlpacaServices(
+            client=client,
+            broker=AlpacaPaperBrokerAdapter(
+                client, SQLAlchemyAlpacaPaperOrderRepository(session).save
+            ),
+            historical_import=ImportHistoricalDataset(
+                CreateDatasetSnapshot(
+                    AlpacaHistoricalMarketDataProvider(
+                        client, configuration.market_data_feed
+                    ),
+                    storage,
+                    datasets,
+                ),
+                loader,
+            ),
+        )
+    finally:
+        client.client.close()
+
+
+AlpacaDependency = Annotated[AlpacaServices, Depends(get_alpaca_services)]

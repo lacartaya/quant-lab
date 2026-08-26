@@ -9,7 +9,7 @@
 <body>
   <header>
     <div><span class="eyebrow">RESEARCH OPERATIONS</span><h1>Quant Lab</h1></div>
-    <nav><a href="/dashboard/">Overview</a><a href="#paper-arena">Paper Arena</a><a href="#knowledge">Knowledge</a><a href="/docs">API</a></nav>
+    <nav><a href="/dashboard/">Overview</a><a href="#market-data">Market Data</a><a href="#alpaca-paper">Alpaca Paper</a><a href="#paper-arena">Paper Arena</a><a href="#knowledge">Knowledge</a><a href="/docs">OpenAPI</a></nav>
   </header>
   <main>
     <div id="error" class="error hidden"></div>
@@ -20,8 +20,38 @@
         <div class="section-heading"><h2>Experiments</h2><span class="muted">Newest first</span></div>
         <div id="experiments" class="empty">Loading experiments…</div>
       </div>
+      <div id="market-data" class="panel">
+        <div class="section-heading"><h2>Market Data / Datasets</h2><span class="badge">ALPACA IEX · DAILY</span></div>
+        <div id="datasets" class="empty">Loading dataset snapshots…</div>
+        <h3>Import Alpaca historical data</h3>
+        <form id="dataset-import-form" class="prior-form">
+          <label>Symbol<input name="instrument" required value="SPY"></label>
+          <label>Timeframe<select name="timeframe"><option value="1Day">1 Day</option><option value="1Min">1 Minute (forward warm-up)</option></select></label>
+          <label>Start (UTC)<input name="start" type="datetime-local" required value="2016-01-01T00:00"></label>
+          <label>End (UTC)<input name="end" type="datetime-local" required></label>
+          <button type="submit">Import immutable snapshot</button>
+          <button id="show-import-curl" type="button" class="secondary">View / copy curl</button>
+        </form>
+        <pre id="dataset-import-result" class="result hidden"></pre>
+      </div>
+      <div id="alpaca-paper" class="panel paper-warning">
+        <div class="section-heading"><div><span class="eyebrow">PAPER / SIMULATED</span><h2>Alpaca Paper Trading</h2></div><button id="refresh-alpaca" type="button">Verify connection</button></div>
+        <div id="alpaca-account" class="empty">Connection is checked only when requested.</div>
+        <div id="alpaca-positions"></div>
+        <div id="alpaca-orders"></div>
+        <h3>Submit PAPER market order</h3>
+        <form id="alpaca-order-form" class="prior-form">
+          <label>Symbol<input name="symbol" required value="SPY"></label>
+          <label>Side<select name="side"><option value="buy">BUY</option><option value="sell">SELL</option></select></label>
+          <label>Quantity<input name="quantity" type="number" min="0.000001" step="0.000001" required value="1"></label>
+          <label>Client order ID<input name="client_order_id" required></label>
+          <button type="submit">Submit PAPER order</button>
+        </form>
+        <pre id="alpaca-order-result" class="result hidden"></pre>
+        <p class="muted">No live-money endpoint or control exists. Closing positions requires browser confirmation and the PAPER-only Quant Lab API.</p>
+      </div>
       <div id="paper-arena" class="panel">
-        <div class="section-heading"><h2>Paper Arena</h2><span class="muted">Forward-only replay · fake capital</span></div>
+        <div class="section-heading"><h2>Paper Arena</h2><span class="muted">Replay or Alpaca IEX forward bars · internal fake capital</span></div>
         <div id="paper-sessions" class="empty">Loading paper sessions…</div>
       </div>
       <div id="knowledge" class="panel">

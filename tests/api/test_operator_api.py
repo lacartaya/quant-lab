@@ -7,7 +7,11 @@ from uuid import UUID
 from fastapi.testclient import TestClient
 
 from apps.api.dependencies import (
+    AlpacaServices,
+    DatasetServices,
     PaperServices,
+    get_alpaca_services,
+    get_dataset_services,
     get_operator_queries,
     get_paper_services,
 )
@@ -22,6 +26,9 @@ from quant.application import (
 )
 from quant.domain import (
     AdjustmentPolicy,
+    AlpacaPaperAccount,
+    AlpacaPaperOrder,
+    AlpacaPaperPosition,
     DatasetSnapshot,
     Experiment,
     ExperimentRun,
@@ -30,8 +37,10 @@ from quant.domain import (
     GateDecision,
     GateRuleOutcome,
     GateRuleResult,
+    HistoricalDataset,
     Hypothesis,
     HypothesisStatus,
+    MarketBar,
     MetricSet,
     PaperParticipant,
     PaperParticipantStatus,
@@ -222,6 +231,8 @@ def fixture() -> tuple[Mock, FixtureValues]:
     queries.gate_evaluations.return_value = (gate,)
     queries.gate_evaluation.return_value = gate
     queries.strategy_version.return_value = version
+    queries.list_datasets.return_value = (dataset,)
+    queries.dataset.return_value = dataset
     queries.list_hypotheses.return_value = (hypothesis,)
     queries.hypothesis_detail.return_value = HypothesisDetail(
         hypothesis, (experiment,), (record,), ()
@@ -253,6 +264,101 @@ def fixture() -> tuple[Mock, FixtureValues]:
     }
 
 
+def test_dataset_and_alpaca_paper_api_never_expose_credentials() -> None:
+    queries, _ = fixture()
+    snapshot = queries.list_datasets.return_value[0]
+    dataset_repository = Mock()
+    dataset_repository.list_all.return_value = [snapshot]
+    dataset_repository.get.return_value = snapshot
+    loaded = HistoricalDataset.from_bars(
+        market="US_EQUITIES",
+        instrument="SPY",
+        timeframe="1D",
+        adjustment_policy=AdjustmentPolicy.RAW,
+        bars=(
+            MarketBar(
+                NOW - timedelta(days=1),
+                Decimal("100"),
+                Decimal("101"),
+                Decimal("99"),
+                Decimal("100"),
+                Decimal("1000"),
+            ),
+        ),
+    )
+    broker = Mock()
+    broker.get_account.return_value = AlpacaPaperAccount(
+        "account-id",
+        "PA123",
+        "ACTIVE",
+        "USD",
+        Decimal("10000"),
+        Decimal("20000"),
+        Decimal("10500"),
+        Decimal("10500"),
+        False,
+        False,
+    )
+    broker.list_positions.return_value = (
+        AlpacaPaperPosition(
+            "SPY",
+            Decimal("1"),
+            Decimal("470"),
+            Decimal("471"),
+            Decimal("471"),
+            Decimal("1"),
+            Decimal("0.002"),
+        ),
+    )
+    broker.submit_order.return_value = AlpacaPaperOrder(
+        "order-id",
+        "ql-api-test",
+        "SPY",
+        "buy",
+        "market",
+        "day",
+        "accepted",
+        Decimal("1"),
+        Decimal("0"),
+        None,
+        NOW,
+        None,
+    )
+    alpaca = AlpacaServices(Mock(), broker, Mock())
+    app.dependency_overrides[get_operator_queries] = lambda: cast(
+        OperatorQueries, queries
+    )
+    app.dependency_overrides[get_alpaca_services] = lambda: alpaca
+    app.dependency_overrides[get_dataset_services] = lambda: DatasetServices(
+        dataset_repository, lambda _: loaded
+    )
+    with TestClient(app) as client:
+        datasets = client.get("/api/v1/datasets")
+        assert datasets.status_code == 200
+        assert datasets.json()["items"][0]["instrument"] == "SPY"
+        assert datasets.json()["items"][0]["bar_count"] == 1
+        account = client.get("/api/v1/brokers/alpaca/paper/account")
+        assert account.status_code == 200
+        assert account.json()["simulated"] is True
+        assert "secret" not in account.text.lower()
+        position = client.get("/api/v1/brokers/alpaca/paper/positions")
+        assert position.json()[0]["symbol"] == "SPY"
+        order = client.post(
+            "/api/v1/brokers/alpaca/paper/orders",
+            json={
+                "symbol": "SPY",
+                "quantity": 1,
+                "side": "buy",
+                "type": "market",
+                "time_in_force": "day",
+                "client_order_id": "ql-api-test",
+            },
+        )
+        assert order.status_code == 201
+        assert order.json()["simulated"] is True
+    app.dependency_overrides.clear()
+
+
 def client_for(queries: Mock) -> TestClient:
     app.dependency_overrides[get_operator_queries] = lambda: cast(
         OperatorQueries, queries
@@ -268,6 +374,9 @@ def test_health_and_dashboard_smoke() -> None:
         assert dashboard.status_code == 200
         assert "Quant Lab" in dashboard.text
         assert "Paper Arena" in dashboard.text
+        assert "Market Data / Datasets" in dashboard.text
+        assert "PAPER / SIMULATED" in dashboard.text
+        assert "View / copy curl" in dashboard.text
         assert "No gate evaluation" in client.get("/dashboard/app.js").text
     app.dependency_overrides.clear()
 

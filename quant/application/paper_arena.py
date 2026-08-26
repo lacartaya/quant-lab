@@ -37,6 +37,7 @@ from quant.ports.paper_repository import PaperRepository
 
 PAPER_ENGINE_VERSION = "paper-engine-v1"
 REPLAY_PROVIDER_VERSION = "replay-provider-v1"
+ALPACA_IEX_PROVIDER_VERSION = "alpaca-iex-polling-v1"
 HISTORICAL_TO_PAPER_POLICY = "HISTORICAL_TO_PAPER"
 
 
@@ -74,7 +75,10 @@ class CreatePaperSession:
     clock: Callable[[], datetime] = lambda: datetime.now(UTC)
 
     def execute(
-        self, dataset_snapshot_id: UUID, evaluation_start: datetime
+        self,
+        dataset_snapshot_id: UUID,
+        evaluation_start: datetime,
+        provider_name: str = "replay",
     ) -> PaperSession:
         if evaluation_start.tzinfo is None or evaluation_start.utcoffset() is None:
             raise ValueError("paper evaluation start must include a timezone")
@@ -83,7 +87,18 @@ class CreatePaperSession:
         if snapshot is None:
             raise LookupError(f"dataset snapshot {dataset_snapshot_id} was not found")
         dataset = self.load_dataset(dataset_snapshot_id)
-        if not any(bar.timestamp >= evaluation_start for bar in dataset.bars):
+        if provider_name not in {"replay", "alpaca_iex"}:
+            raise ValueError("paper provider must be replay or alpaca_iex")
+        if provider_name == "alpaca_iex" and snapshot.timeframe not in {
+            "1Min",
+            "1Minute",
+        }:
+            raise ValueError(
+                "Alpaca IEX forward polling requires a one-minute warm-up snapshot"
+            )
+        if provider_name == "replay" and not any(
+            bar.timestamp >= evaluation_start for bar in dataset.bars
+        ):
             raise ValueError("paper evaluation start is outside the replay dataset")
         session = PaperSession(
             id=self.id_factory(),
@@ -91,8 +106,12 @@ class CreatePaperSession:
             instrument=snapshot.instrument,
             timeframe=snapshot.timeframe,
             adjustment_policy=snapshot.adjustment_policy,
-            provider_name="replay",
-            provider_version=REPLAY_PROVIDER_VERSION,
+            provider_name=provider_name,
+            provider_version=(
+                REPLAY_PROVIDER_VERSION
+                if provider_name == "replay"
+                else ALPACA_IEX_PROVIDER_VERSION
+            ),
             dataset_snapshot_id=snapshot.id,
             dataset_checksum=snapshot.checksum,
             evaluation_start=evaluation_start,
@@ -409,6 +428,8 @@ class AdvanceReplaySession:
         session = _required(
             self.papers.get_session(session_id), "paper session", session_id
         )
+        if session.provider_name != "replay":
+            raise PaperArenaError("session does not use the replay provider")
         dataset = self.load_dataset(session.dataset_snapshot_id)
         eligible = tuple(
             bar
@@ -442,6 +463,25 @@ class AdvanceReplaySession:
         )
         self.papers.save_session(completed)
         return PaperProcessingResult(completed, None, (), False, True)
+
+
+@dataclass(frozen=True, slots=True)
+class AdvanceLiveSession:
+    papers: PaperRepository
+    processor: ProcessPaperBar
+
+    def execute(
+        self, session_id: UUID, provider: LiveMarketDataProvider
+    ) -> PaperProcessingResult:
+        session = _required(
+            self.papers.get_session(session_id), "paper session", session_id
+        )
+        if session.provider_name != provider.name:
+            raise PaperArenaError("session and live provider identities do not match")
+        bar = provider.next_bar()
+        if bar is None:
+            return PaperProcessingResult(session, None, (), False, False)
+        return self.processor.execute(session_id, bar)
 
 
 @dataclass(frozen=True, slots=True)

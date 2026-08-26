@@ -1,0 +1,3 @@
+meta { name: List Alpaca PAPER orders type: http seq: 5 }
+get { url: {{baseUrl}}/api/v1/brokers/alpaca/paper/orders?status=all body: none auth: none }
+tests { test("orders listed", function () { expect(res.status).to.equal(200); }); }

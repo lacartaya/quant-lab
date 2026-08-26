@@ -1,0 +1,4 @@
+meta { name: Create ALPACA IEX forward internal paper session type: http seq: 3 }
+post { url: {{baseUrl}}/api/v1/paper/sessions body: json auth: none }
+body:json { {"dataset_snapshot_id":"{{snapshotId}}","evaluation_start":"2026-08-25T00:00:00Z","feed_mode":"alpaca_iex"} }
+script:post-response { if (res.status === 200) bru.setEnvVar("sessionId", res.body.id); }

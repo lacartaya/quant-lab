@@ -1,0 +1,20 @@
+# Quant Lab documentation
+
+## User documentation
+
+- [Getting started](../README.md)
+- [Non-technical user guide](user-guide.md)
+- [Alpaca Basic and Paper guide](alpaca-paper-guide.md)
+- [API curl guide](api-curl-guide.md)
+- [Research memory](research-memory.md)
+- [Paper Arena](paper-arena.md)
+- [Validation gates](validation-gates.md)
+- [Bruno collection](../bruno/README.md)
+- Interactive OpenAPI: `http://127.0.0.1:8000/docs`
+- Dashboard: `http://127.0.0.1:8000/dashboard/`
+
+## Engineering documentation
+
+- [Architecture decisions](architecture/)
+- ADR-019 documents the paper-only Alpaca boundary, IEX provenance, retry, and
+  security decisions.

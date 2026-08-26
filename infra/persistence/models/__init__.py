@@ -1,4 +1,5 @@
 from infra.persistence.models.tables import (
+    AlpacaPaperOrderModel,
     Base,
     DatasetSnapshotModel,
     ExperimentModel,
@@ -18,6 +19,7 @@ from infra.persistence.models.tables import (
 
 __all__ = [
     "Base",
+    "AlpacaPaperOrderModel",
     "DatasetSnapshotModel",
     "ExperimentModel",
     "ExperimentRunModel",

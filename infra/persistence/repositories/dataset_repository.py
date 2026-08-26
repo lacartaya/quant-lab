@@ -1,5 +1,6 @@
 from uuid import UUID
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from infra.persistence.mappers import dataset_from_model, dataset_to_model
@@ -18,3 +19,9 @@ class SQLAlchemyDatasetRepository:
     def get(self, snapshot_id: UUID) -> DatasetSnapshot | None:
         row = self._session.get(DatasetSnapshotModel, snapshot_id)
         return dataset_from_model(row) if row is not None else None
+
+    def list_all(self) -> list[DatasetSnapshot]:
+        statement = select(DatasetSnapshotModel).order_by(
+            DatasetSnapshotModel.created_at.desc(), DatasetSnapshotModel.id
+        )
+        return [dataset_from_model(row) for row in self._session.scalars(statement)]

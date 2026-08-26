@@ -363,6 +363,18 @@ class PaperSnapshotModel(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
+class AlpacaPaperOrderModel(Base):
+    __tablename__ = "alpaca_paper_orders"
+
+    order_id: Mapped[str] = mapped_column(String(100), primary_key=True)
+    client_order_id: Mapped[str] = mapped_column(String(128), unique=True, index=True)
+    symbol: Mapped[str] = mapped_column(String(32), index=True)
+    status: Mapped[str] = mapped_column(String(40), index=True)
+    order_snapshot: Mapped[dict[str, object]] = mapped_column(JSONB)
+    first_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    last_reconciled_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
 class PromotionDecisionModel(Base):
     __tablename__ = "promotion_decisions"
     __table_args__ = (

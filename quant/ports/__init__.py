@@ -8,6 +8,7 @@ from quant.ports.hypothesis_repository import HypothesisRepository
 from quant.ports.knowledge_repository import KnowledgeRepository
 from quant.ports.live_market_data import LiveMarketDataProvider
 from quant.ports.market_data_provider import MarketDataProvider
+from quant.ports.paper_broker import PaperBrokerPort
 from quant.ports.paper_repository import PaperRepository
 from quant.ports.strategy_repository import StrategyRepository
 
@@ -22,5 +23,6 @@ __all__ = [
     "LiveMarketDataProvider",
     "MarketDataProvider",
     "PaperRepository",
+    "PaperBrokerPort",
     "StrategyRepository",
 ]

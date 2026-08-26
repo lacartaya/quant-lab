@@ -1,12 +1,18 @@
+from dataclasses import asdict
 from pathlib import Path
 from typing import Annotated, Any
 from uuid import UUID
 
-from fastapi import FastAPI, Query, Request
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from apps.api.dependencies import OperatorDependency, PaperDependency
+from apps.api.dependencies import (
+    AlpacaDependency,
+    DatasetDependency,
+    OperatorDependency,
+    PaperDependency,
+)
 from apps.api.mappers import (
     experiment_detail,
     experiment_run,
@@ -20,12 +26,19 @@ from apps.api.mappers import (
 )
 from apps.api.schemas import (
     AddPaperParticipantRequest,
+    AlpacaPaperAccountResponse,
+    AlpacaPaperFillResponse,
+    AlpacaPaperOrderResponse,
+    AlpacaPaperPositionResponse,
     CreatePaperSessionRequest,
     DashboardSummaryResponse,
+    DatasetSnapshotListResponse,
+    DatasetSnapshotResponse,
     ExperimentDetailResponse,
     ExperimentListResponse,
     ExperimentRunResponse,
     GateResponse,
+    HistoricalImportRequest,
     HypothesisDetailResponse,
     HypothesisListResponse,
     KnowledgeListResponse,
@@ -37,14 +50,25 @@ from apps.api.schemas import (
     PaperSessionResponse,
     PriorArtRequest,
     PriorArtResponse,
+    SubmitAlpacaPaperOrderRequest,
     ValidationResponse,
+)
+from infra.alpaca import (
+    AlpacaAPIError,
+    AlpacaConfigurationError,
+    AlpacaLiveMarketDataProvider,
 )
 from quant.application import CheckPriorArt, OperatorResourceNotFound, PaperArenaError
 from quant.domain import (
+    AdjustmentPolicy,
     ExperimentStatus,
     HypothesisStatus,
+    PaperOrderSide,
+    PaperOrderType,
     PaperParticipant,
     PaperSession,
+    PaperTimeInForce,
+    SubmitAlpacaPaperOrder,
     ValidationType,
 )
 from quant.domain.knowledge import (
@@ -56,7 +80,11 @@ from quant.domain.knowledge import (
 app = FastAPI(
     title="Quant Lab Operator API",
     version="1.0.0",
-    description="Read-oriented access to deterministic Quant Lab research evidence.",
+    description=(
+        "Deterministic research evidence, immutable market-data import, internal "
+        "Paper Arena, and explicitly simulated Alpaca PAPER operations. No "
+        "real-money execution capability."
+    ),
 )
 
 
@@ -80,9 +108,132 @@ async def paper_error_handler(request: Request, error: PaperArenaError) -> JSONR
     return JSONResponse(status_code=409, content={"detail": str(error)})
 
 
+@app.exception_handler(AlpacaConfigurationError)
+async def alpaca_configuration_handler(
+    request: Request, error: AlpacaConfigurationError
+) -> JSONResponse:
+    del request
+    return JSONResponse(status_code=503, content={"detail": str(error)})
+
+
+@app.exception_handler(AlpacaAPIError)
+async def alpaca_api_handler(request: Request, error: AlpacaAPIError) -> JSONResponse:
+    del request
+    status = error.status_code if error.status_code in {403, 404, 429, 504} else 502
+    return JSONResponse(
+        status_code=status,
+        content={"detail": str(error), "alpaca_request_id": error.request_id},
+    )
+
+
 @app.get("/health", tags=["health"])
 def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+def _dataset_response(
+    snapshot: Any,
+    *,
+    bar_count: int | None = None,
+    actual_start_at: Any = None,
+    actual_end_at: Any = None,
+) -> DatasetSnapshotResponse:
+    provider, separator, feed = snapshot.provider.partition(":")
+    return DatasetSnapshotResponse(
+        id=snapshot.id,
+        provider=provider.upper(),
+        feed=feed if separator else None,
+        market=snapshot.market,
+        instrument=snapshot.instrument,
+        timeframe=snapshot.timeframe,
+        requested_start_at=snapshot.start_at,
+        requested_end_at=snapshot.end_at,
+        actual_start_at=actual_start_at,
+        actual_end_at=actual_end_at,
+        bar_count=bar_count,
+        adjustment_policy=snapshot.adjustment_policy.value,
+        checksum=snapshot.checksum,
+        storage_location=snapshot.storage_location,
+        created_at=snapshot.created_at,
+    )
+
+
+@app.get(
+    "/api/v1/datasets",
+    response_model=DatasetSnapshotListResponse,
+    tags=["market-data"],
+    summary="List immutable dataset snapshots",
+)
+def list_datasets(
+    datasets: DatasetDependency,
+    limit: Annotated[int, Query(ge=1, le=100)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> DatasetSnapshotListResponse:
+    items = datasets.repository.list_all()[offset : offset + limit]
+    return DatasetSnapshotListResponse(
+        items=[
+            _dataset_response(
+                item,
+                bar_count=len(loaded.bars),
+                actual_start_at=loaded.bars[0].timestamp,
+                actual_end_at=loaded.bars[-1].timestamp,
+            )
+            for item in items
+            for loaded in (datasets.loader(item.id),)
+        ],
+        page=PageMetadata(limit=limit, offset=offset, returned=len(items)),
+    )
+
+
+@app.get(
+    "/api/v1/datasets/{snapshot_id}",
+    response_model=DatasetSnapshotResponse,
+    tags=["market-data"],
+    summary="Get dataset lineage and immutable identity",
+)
+def get_dataset(
+    snapshot_id: UUID, datasets: DatasetDependency
+) -> DatasetSnapshotResponse:
+    snapshot = datasets.repository.get(snapshot_id)
+    if snapshot is None:
+        raise LookupError(f"dataset snapshot {snapshot_id} was not found")
+    loaded = datasets.loader(snapshot_id)
+    return _dataset_response(
+        snapshot,
+        bar_count=len(loaded.bars),
+        actual_start_at=loaded.bars[0].timestamp,
+        actual_end_at=loaded.bars[-1].timestamp,
+    )
+
+
+@app.post(
+    "/api/v1/market-data/import",
+    response_model=DatasetSnapshotResponse,
+    status_code=201,
+    tags=["market-data"],
+    summary="Import Alpaca IEX daily bars into an immutable Parquet snapshot",
+)
+def import_market_data(
+    request: HistoricalImportRequest, alpaca: AlpacaDependency
+) -> DatasetSnapshotResponse:
+    if request.provider.upper() != "ALPACA":
+        raise ValueError("the HTTP import workflow currently supports ALPACA only")
+    if request.feed.lower() != "iex":
+        raise ValueError("Alpaca Basic import requires the IEX feed")
+    result = alpaca.historical_import.execute(
+        market=request.market,
+        instrument=request.instrument,
+        timeframe=request.timeframe,
+        start_at=request.start,
+        end_at=request.end,
+        adjustment_policy=AdjustmentPolicy(request.adjustment_policy.lower()),
+    )
+    return _dataset_response(
+        result.snapshot,
+        bar_count=result.bar_count,
+        actual_start_at=result.actual_start_at,
+        actual_end_at=result.actual_end_at,
+    )
 
 
 @app.get(
@@ -396,7 +547,7 @@ def create_paper_session(
 ) -> PaperSessionResponse:
     return _paper_session(
         papers.create_session.execute(
-            request.dataset_snapshot_id, request.evaluation_start
+            request.dataset_snapshot_id, request.evaluation_start, request.feed_mode
         ),
         papers,
     )
@@ -466,6 +617,39 @@ def process_next_replay_bar(
     session_id: UUID, papers: PaperDependency
 ) -> PaperProcessingResponse:
     result = papers.advance.execute(session_id)
+    return PaperProcessingResponse(
+        session_id=result.session.id,
+        observation_timestamp=(
+            result.observation.bar.timestamp if result.observation else None
+        ),
+        processed_participant_ids=[item.participant_id for item in result.snapshots],
+        duplicate=result.duplicate,
+        completed=result.completed,
+    )
+
+
+@app.post(
+    "/api/v1/paper/sessions/{session_id}/poll-alpaca-iex",
+    response_model=PaperProcessingResponse,
+    tags=["paper"],
+    summary="Poll one forward Alpaca IEX bar into INTERNAL paper simulation",
+)
+def poll_alpaca_paper_bar(
+    session_id: UUID,
+    papers: PaperDependency,
+    alpaca: AlpacaDependency,
+) -> PaperProcessingResponse:
+    session = papers.repository.get_session(session_id)
+    if session is None:
+        raise LookupError(f"paper session {session_id} was not found")
+    if papers.advance_live is None:
+        raise PaperArenaError("Alpaca live paper processing is not configured")
+    result = papers.advance_live.execute(
+        session_id,
+        AlpacaLiveMarketDataProvider(
+            alpaca.client, session.instrument, session.last_processed_at
+        ),
+    )
     return PaperProcessingResponse(
         session_id=result.session.id,
         observation_timestamp=(
@@ -561,6 +745,144 @@ def get_paper_metrics(
     participant_id: UUID, papers: PaperDependency
 ) -> PaperParticipantResponse:
     return get_paper_participant(participant_id, papers)
+
+
+@app.get(
+    "/api/v1/brokers/alpaca/paper/connectivity",
+    response_model=dict[str, Any],
+    tags=["alpaca-paper"],
+    summary="Verify the configured Alpaca simulated account",
+)
+def alpaca_paper_connectivity(alpaca: AlpacaDependency) -> dict[str, Any]:
+    account = alpaca.broker.get_account()
+    return {
+        "status": "ok",
+        "broker": "alpaca",
+        "execution_environment": "paper",
+        "simulated": True,
+        "account_status": account.status,
+    }
+
+
+@app.get(
+    "/api/v1/brokers/alpaca/paper/account",
+    response_model=AlpacaPaperAccountResponse,
+    tags=["alpaca-paper"],
+    summary="Read Alpaca PAPER account balances",
+)
+def alpaca_paper_account(alpaca: AlpacaDependency) -> AlpacaPaperAccountResponse:
+    return AlpacaPaperAccountResponse(**asdict(alpaca.broker.get_account()))
+
+
+@app.post(
+    "/api/v1/brokers/alpaca/paper/orders",
+    response_model=AlpacaPaperOrderResponse,
+    status_code=201,
+    tags=["alpaca-paper"],
+    summary="Submit an Alpaca PAPER market order",
+)
+def submit_alpaca_paper_order(
+    request: SubmitAlpacaPaperOrderRequest, alpaca: AlpacaDependency
+) -> AlpacaPaperOrderResponse:
+    try:
+        command = SubmitAlpacaPaperOrder(
+            symbol=request.symbol,
+            quantity=request.quantity,
+            side=PaperOrderSide(request.side.lower()),
+            order_type=PaperOrderType(request.type.lower()),
+            time_in_force=PaperTimeInForce(request.time_in_force.lower()),
+            client_order_id=request.client_order_id,
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    return AlpacaPaperOrderResponse(**asdict(alpaca.broker.submit_order(command)))
+
+
+@app.get(
+    "/api/v1/brokers/alpaca/paper/orders",
+    response_model=list[AlpacaPaperOrderResponse],
+    tags=["alpaca-paper"],
+    summary="List Alpaca PAPER orders",
+)
+def list_alpaca_paper_orders(
+    alpaca: AlpacaDependency,
+    status: str = Query("open", pattern="^(open|closed|all)$"),
+) -> list[AlpacaPaperOrderResponse]:
+    return [
+        AlpacaPaperOrderResponse(**asdict(item))
+        for item in alpaca.broker.list_orders(status)
+    ]
+
+
+@app.get(
+    "/api/v1/brokers/alpaca/paper/orders/{order_id}",
+    response_model=AlpacaPaperOrderResponse,
+    tags=["alpaca-paper"],
+    summary="Get one Alpaca PAPER order",
+)
+def get_alpaca_paper_order(
+    order_id: str, alpaca: AlpacaDependency
+) -> AlpacaPaperOrderResponse:
+    return AlpacaPaperOrderResponse(**asdict(alpaca.broker.get_order(order_id)))
+
+
+@app.get(
+    "/api/v1/brokers/alpaca/paper/positions",
+    response_model=list[AlpacaPaperPositionResponse],
+    tags=["alpaca-paper"],
+    summary="List Alpaca PAPER positions",
+)
+def list_alpaca_paper_positions(
+    alpaca: AlpacaDependency,
+) -> list[AlpacaPaperPositionResponse]:
+    return [
+        AlpacaPaperPositionResponse(**asdict(item))
+        for item in alpaca.broker.list_positions()
+    ]
+
+
+@app.get(
+    "/api/v1/brokers/alpaca/paper/positions/{symbol}",
+    response_model=AlpacaPaperPositionResponse,
+    tags=["alpaca-paper"],
+    summary="Get one Alpaca PAPER position",
+)
+def get_alpaca_paper_position(
+    symbol: str, alpaca: AlpacaDependency
+) -> AlpacaPaperPositionResponse:
+    return AlpacaPaperPositionResponse(**asdict(alpaca.broker.get_position(symbol)))
+
+
+@app.delete(
+    "/api/v1/brokers/alpaca/paper/positions/{symbol}",
+    response_model=AlpacaPaperOrderResponse,
+    tags=["alpaca-paper"],
+    summary="Close one Alpaca PAPER position",
+)
+def close_alpaca_paper_position(
+    symbol: str,
+    alpaca: AlpacaDependency,
+    confirm: bool = Query(False, description="Must be true for this PAPER write"),
+) -> AlpacaPaperOrderResponse:
+    if not confirm:
+        raise HTTPException(
+            status_code=409, detail="confirm=true is required to close a PAPER position"
+        )
+    return AlpacaPaperOrderResponse(**asdict(alpaca.broker.close_position(symbol)))
+
+
+@app.get(
+    "/api/v1/brokers/alpaca/paper/fills",
+    response_model=list[AlpacaPaperFillResponse],
+    tags=["alpaca-paper"],
+    summary="List recent Alpaca PAPER fill activities",
+)
+def list_alpaca_paper_fills(
+    alpaca: AlpacaDependency,
+) -> list[AlpacaPaperFillResponse]:
+    return [
+        AlpacaPaperFillResponse(**asdict(item)) for item in alpaca.broker.list_fills()
+    ]
 
 
 _dashboard = Path(__file__).resolve().parents[1] / "dashboard"

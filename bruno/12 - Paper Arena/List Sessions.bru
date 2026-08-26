@@ -1,0 +1,3 @@
+meta { name: List internal Paper Arena sessions type: http seq: 1 }
+get { url: {{baseUrl}}/api/v1/paper/sessions body: none auth: none }
+tests { test("listed", function () { expect(res.status).to.equal(200); }); }

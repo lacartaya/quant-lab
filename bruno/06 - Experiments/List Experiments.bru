@@ -1,0 +1,3 @@
+meta { name: List Experiments type: http seq: 1 }
+get { url: {{baseUrl}}/api/v1/experiments?limit=50&offset=0 body: none auth: none }
+tests { test("listed", function () { expect(res.status).to.equal(200); }); }

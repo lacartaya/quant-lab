@@ -1,0 +1,5 @@
+meta { name: Import SPY Daily from Alpaca IEX type: http seq: 1 }
+post { url: {{baseUrl}}/api/v1/market-data/import body: json auth: none }
+body:json { {"provider":"ALPACA","instrument":"SPY","market":"US_EQUITIES","timeframe":"1Day","start":"2016-01-01T00:00:00Z","end":"2026-08-01T00:00:00Z","feed":"iex","adjustment_policy":"raw"} }
+script:post-response { if (res.status === 201) bru.setEnvVar("snapshotId", res.body.id); }
+tests { test("snapshot created", function () { expect(res.status).to.equal(201); expect(res.body.id).to.exist; }); }
