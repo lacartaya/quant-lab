@@ -96,7 +96,12 @@ def experiment_detail(value: ExperimentDetail) -> ExperimentDetailResponse:
 
 def experiment_run(value: ExperimentRun) -> ExperimentRunResponse:
     configuration = dict(value.configuration)
-    analytics = configuration.get("analytics")
+    execution = configuration.get("execution")
+    analytics = (
+        execution.get("analytics")
+        if isinstance(execution, Mapping)
+        else configuration.get("analytics")
+    )
     analytics_version = (
         analytics.get("version") if isinstance(analytics, Mapping) else None
     )
@@ -111,7 +116,9 @@ def experiment_run(value: ExperimentRun) -> ExperimentRunResponse:
         analytics_version=str(analytics_version)
         if analytics_version is not None
         else None,
-        result_fingerprint=_optional_string(configuration.get("result_fingerprint")),
+        result_fingerprint=_optional_string(
+            configuration.get("fingerprint") or configuration.get("result_fingerprint")
+        ),
         configuration=json_value(configuration),
         started_at=value.started_at,
         completed_at=value.completed_at,

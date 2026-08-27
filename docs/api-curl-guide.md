@@ -10,6 +10,8 @@ export RUN_ID=00000000-0000-0000-0000-000000000002
 export VALIDATION_ID=00000000-0000-0000-0000-000000000003
 export GATE_ID=00000000-0000-0000-0000-000000000004
 export SNAPSHOT_ID=00000000-0000-0000-0000-000000000005
+export HYPOTHESIS_ID=00000000-0000-0000-0000-000000000008
+export VERSION_ID=00000000-0000-0000-0000-000000000009
 export SESSION_ID=00000000-0000-0000-0000-000000000006
 export PARTICIPANT_ID=00000000-0000-0000-0000-000000000007
 ```
@@ -79,8 +81,14 @@ curl "$QUANT_LAB_URL/api/v1/hypotheses/$HYPOTHESIS_ID"
 # {"hypothesis":{...},"experiments":[...],"knowledge":[...],"derived_hypothesis_ids":[]}
 ```
 
-There is no public hypothesis-creation endpoint in this release; use the existing
-application workflow. This gap is explicit rather than represented by a fake API.
+**Create** — POST. The structured identity fields are used by deterministic
+prior-art checking; exact duplicates and unchanged rejected prior art return 409.
+
+```bash
+curl -X POST "$QUANT_LAB_URL/api/v1/hypotheses" -H 'Content-Type: application/json' \
+  --data '{"title":"SPY daily 50/200 trend","description":"Evaluate a 50/200 moving-average trend rule on SPY daily bars.","rationale":"Persistent trends may survive realistic execution costs.","strategy_family":"moving_average_trend","market":"US_EQUITIES","instrument":"SPY","timeframe":"1Day","parameters":{"short_window":50,"long_window":200},"expected_benefit":"Transparent trend participation","expected_tradeoff":"Whipsaw and delayed entries","success_criteria":"Reproducible validation evidence","rejection_criteria":"Insufficient robust evidence","numeric_parameter_relative_tolerance":0.02}'
+# {"id":"...","status":"active_research",...}
+```
 
 ## 5. Prior Art
 
@@ -103,7 +111,14 @@ curl "$QUANT_LAB_URL/api/v1/strategy-versions/$VERSION_ID"
 # {"id":"...","algorithm_key":"moving_average_trend","parameters":{...},...}
 ```
 
-Strategy creation is not a public write endpoint in this release.
+**Create StrategyVersion** — POST. `algorithm_key` is resolved only through the
+server-side executable registry; unknown algorithms or invalid windows return 422.
+
+```bash
+curl -X POST "$QUANT_LAB_URL/api/v1/strategy-versions" -H 'Content-Type: application/json' \
+  --data '{"name":"SPY MA Trend","description":"Moving-average trend strategy","strategy_family":"moving_average_trend","version":"v1","git_commit":"operator-created","algorithm_key":"moving_average_trend","parameters":{"short_window":50,"long_window":200}}'
+# {"strategy_id":"...","strategy_version_id":"...","algorithm_key":"moving_average_trend",...}
+```
 
 ## 7. Experiments
 
@@ -122,8 +137,29 @@ curl "$QUANT_LAB_URL/api/v1/experiments/$EXPERIMENT_ID"
 # {"experiment":{...},"hypothesis":{...},"strategy_version":{...},"dataset_snapshot":{...},"runs":[...]}
 ```
 
-Experiment creation/execution remains an application workflow, not a public
-write route in this release.
+**Create** — POST; every referenced ID must already exist:
+
+```bash
+curl -X POST "$QUANT_LAB_URL/api/v1/experiments" -H 'Content-Type: application/json' \
+  --data "{\"hypothesis_id\":\"$HYPOTHESIS_ID\",\"strategy_version_id\":\"$VERSION_ID\",\"dataset_snapshot_id\":\"$SNAPSHOT_ID\"}"
+# {"experiment_id":"...","status":"created",...}
+```
+
+**Run** — POST. Execution assumptions are explicit and persisted; this invokes
+the existing deterministic `RunExperiment` service and creates BACKTEST evidence.
+
+```bash
+curl -X POST "$QUANT_LAB_URL/api/v1/experiments/$EXPERIMENT_ID/runs" \
+  -H 'Content-Type: application/json' \
+  --data '{"initial_cash":"10000","position_fraction":"1","fee":{"model":"percentage","rate":"0.001"},"slippage":{"model":"basis_points","basis_points":"10"},"periods_per_year":252,"annual_risk_free_rate":"0"}'
+# {"experiment_run_id":"...","status":"completed","result_fingerprint":"...","validation_ids":["..."]}
+```
+
+The current public write workflow stops after deterministic BACKTEST execution.
+OOS, walk-forward, sensitivity, stress, Monte Carlo, adversarial generation, and
+gate evaluation retain their existing application services and read endpoints;
+they were not exposed because each requires a substantial explicit configuration
+contract and no reproducibility-safe operator orchestration exists yet.
 
 ## 8. Experiment Runs
 

@@ -1,12 +1,15 @@
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
+from pathlib import Path
 from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
-from apps.api.dependencies import get_operator_queries
+from apps.api.dependencies import get_operator_queries, get_research_workflow
 from apps.api.main import app
+from infra.market_data import LocalParquetDatasetStorage
 from infra.persistence.repositories import (
     SQLAlchemyDatasetRepository,
     SQLAlchemyExperimentRepository,
@@ -15,7 +18,12 @@ from infra.persistence.repositories import (
     SQLAlchemyKnowledgeRepository,
     SQLAlchemyStrategyRepository,
 )
-from quant.application import OperatorQueries
+from quant.application import (
+    LoadDatasetSnapshot,
+    OperatorQueries,
+    OperatorResearchWorkflow,
+    canonical_bars_checksum,
+)
 from quant.domain import (
     AdjustmentPolicy,
     DatasetSnapshot,
@@ -31,6 +39,7 @@ from quant.domain import (
     Hypothesis,
     HypothesisStatus,
     KnowledgeRecord,
+    MarketBar,
     MetricSet,
     ReconsiderationCondition,
     ResearchSignature,
@@ -45,6 +54,131 @@ from quant.knowledge import research_fingerprint
 
 pytestmark = pytest.mark.integration
 NOW = datetime(2026, 8, 15, 12, tzinfo=UTC)
+
+
+def test_operator_can_create_and_run_complete_research_lineage(
+    postgres_session: Session, tmp_path: Path
+) -> None:
+    hypotheses = SQLAlchemyHypothesisRepository(postgres_session)
+    strategies = SQLAlchemyStrategyRepository(postgres_session)
+    datasets = SQLAlchemyDatasetRepository(postgres_session)
+    experiments = SQLAlchemyExperimentRepository(postgres_session)
+    gates = SQLAlchemyGateRepository(postgres_session)
+    knowledge = SQLAlchemyKnowledgeRepository(postgres_session)
+    storage = LocalParquetDatasetStorage(tmp_path)
+    bars = tuple(
+        MarketBar(
+            NOW + timedelta(days=index),
+            Decimal(100 + index),
+            Decimal(102 + index),
+            Decimal(99 + index),
+            Decimal(101 + index),
+            Decimal(1_000),
+        )
+        for index in range(8)
+    )
+    snapshot_id = uuid4()
+    snapshot = DatasetSnapshot(
+        snapshot_id,
+        "fixture",
+        "US_EQUITIES",
+        "SPY",
+        "1Day",
+        bars[0].timestamp,
+        bars[-1].timestamp + timedelta(microseconds=1),
+        "ohlcv-v1",
+        canonical_bars_checksum(bars),
+        storage.write(snapshot_id, bars),
+        AdjustmentPolicy.RAW,
+        NOW,
+    )
+    datasets.add(snapshot)
+    workflow = OperatorResearchWorkflow(
+        hypotheses,
+        knowledge,
+        strategies,
+        datasets,
+        experiments,
+        LoadDatasetSnapshot(storage, datasets),
+    )
+    queries = OperatorQueries(
+        hypotheses, strategies, datasets, experiments, gates, knowledge
+    )
+    app.dependency_overrides[get_research_workflow] = lambda: workflow
+    app.dependency_overrides[get_operator_queries] = lambda: queries
+    try:
+        with TestClient(app) as client:
+            hypothesis_request = {
+                    "title": "SPY daily trend",
+                    "description": "Test a daily moving-average trend rule.",
+                    "rationale": "Persistent trends may survive costs.",
+                    "strategy_family": "moving_average_trend",
+                    "market": "US_EQUITIES",
+                    "instrument": "SPY",
+                    "timeframe": "1Day",
+                    "parameters": {"short_window": 2, "long_window": 3},
+                    "expected_benefit": "Transparent trend exposure",
+                    "expected_tradeoff": "Whipsaw losses",
+                    "success_criteria": "Reproducible positive evidence",
+                    "rejection_criteria": "No robust evidence",
+            }
+            hypothesis_response = client.post(
+                "/api/v1/hypotheses", json=hypothesis_request
+            )
+            assert hypothesis_response.status_code == 201
+            duplicate = client.post("/api/v1/hypotheses", json=hypothesis_request)
+            assert duplicate.status_code == 409
+            hypothesis_id = hypothesis_response.json()["id"]
+
+            version_response = client.post(
+                "/api/v1/strategy-versions",
+                json={
+                    "name": "MA Trend",
+                    "description": "Daily moving-average trend",
+                    "strategy_family": "moving_average_trend",
+                    "version": "v1",
+                    "git_commit": "api-test",
+                    "algorithm_key": "moving_average_trend",
+                    "parameters": {"short_window": 2, "long_window": 3},
+                },
+            )
+            assert version_response.status_code == 201
+            version_id = version_response.json()["strategy_version_id"]
+            experiment_response = client.post(
+                "/api/v1/experiments",
+                json={
+                    "hypothesis_id": hypothesis_id,
+                    "strategy_version_id": version_id,
+                    "dataset_snapshot_id": str(snapshot.id),
+                },
+            )
+            assert experiment_response.status_code == 201
+            experiment_id = experiment_response.json()["experiment_id"]
+            run_response = client.post(
+                f"/api/v1/experiments/{experiment_id}/runs",
+                json={
+                    "initial_cash": "10000",
+                    "position_fraction": "1",
+                    "fee": {"model": "percentage", "rate": "0.001"},
+                    "slippage": {"model": "basis_points", "basis_points": "10"},
+                    "periods_per_year": 252,
+                    "annual_risk_free_rate": "0",
+                },
+            )
+            assert run_response.status_code == 201
+            payload = run_response.json()
+            assert payload["status"] == "completed"
+            assert payload["result_fingerprint"]
+            assert len(payload["validation_ids"]) == 1
+            assert client.get(
+                f"/api/v1/experiment-runs/{payload['experiment_run_id']}"
+            ).status_code == 200
+            validations = client.get(
+                f"/api/v1/experiment-runs/{payload['experiment_run_id']}/validations"
+            ).json()
+            assert [item["validation_type"] for item in validations] == ["backtest"]
+    finally:
+        app.dependency_overrides.clear()
 
 
 def test_complete_research_evidence_is_observable_over_http(

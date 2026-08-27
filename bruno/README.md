@@ -8,17 +8,18 @@ The collection contains one request for every current public OpenAPI operation.
 It is organized in research order: market-data import, immutable datasets,
 hypotheses/prior art, experiments, validation, gate, knowledge, internal Paper
 Arena, and Alpaca Paper. IDs are environment variables. Import captures
-`snapshotId`; paper-session/participant/order creates capture their returned IDs.
-Set persisted research IDs manually where the current API is read-only.
+`snapshotId`; research creation captures `hypothesisId`, `versionId`,
+`experimentId`, `runId`, and the BACKTEST `validationId`; paper operations
+capture their own returned IDs.
 
 ## Example - SPY Research
 
-Run Health, Import SPY Daily, Get Dataset, Check Prior Art, then select existing
-hypothesis/version/experiment/run IDs and inspect all validation, adversarial,
-and gate requests. The current public API does not create or execute the full
-research pipeline; the collection states this gap instead of faking requests.
-If an immutable PASS gate exists, create an internal Paper Arena session and add
-its participant.
+Run Health, import/list SPY Daily, check prior art, create the hypothesis, create
+the immutable MA 50/200 StrategyVersion, create the experiment, and run it. Each
+write captures the ID required by the next request. The run creates and captures
+BACKTEST evidence. Later validation-generation services are not yet public HTTP
+writes; their persisted evidence remains inspectable in folders 08–10. If an
+immutable PASS gate exists, the Paper Arena workflow can admit it.
 
 ## Example - Alpaca Paper Trading
 

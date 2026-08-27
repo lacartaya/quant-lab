@@ -1,5 +1,17 @@
 # Quant Lab user guide
 
+## Your First Real Research Experiment — SPY 50/200
+
+Open **New Research** in the dashboard. Choose an existing SPY `1Day` dataset,
+create the supplied hypothesis, create the `moving_average_trend` StrategyVersion
+with short window 50 and long window 200, bind those records into an experiment,
+and press **Run experiment**. Each form can copy the equivalent curl request.
+
+The result page shows the immutable lineage, execution assumptions, metrics, Buy
+& Hold comparison, and BACKTEST validation. A good-looking result is evidence,
+not a promise and not permission to trade real money. See
+[the exact walkthrough](first-real-research-run.md) for the curl sequence.
+
 Quant Lab is a research notebook with strict memory. It records an investment
 idea, the data used to test it, every validation attempt, and simulated paper
 evidence. It does not promise profit and cannot trade real money.

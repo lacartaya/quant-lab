@@ -7,6 +7,7 @@
 - [Alpaca Basic and Paper guide](alpaca-paper-guide.md)
 - [API curl guide](api-curl-guide.md)
 - [Research memory](research-memory.md)
+- [First real SPY 50/200 research run](first-real-research-run.md)
 - [Paper Arena](paper-arena.md)
 - [Validation gates](validation-gates.md)
 - [Bruno collection](../bruno/README.md)

@@ -73,13 +73,14 @@ For containerized local operation:
 docker compose up --build postgres api
 ```
 
-The interface supports experiment and lineage inspection,
+The interface supports creating hypotheses, immutable StrategyVersions and
+experiments, running deterministic historical backtests, inspecting lineage,
 validation and benchmark evidence, adversarial findings, gate decisions,
-hypothesis and research-memory queries, structured prior-art checks, Alpaca
-historical import, internal Paper Arena operations, and explicitly simulated
-Alpaca Paper actions. It cannot edit authoritative metrics, findings, or gate
-results and has no live-money controls. It is intended for local/internal use;
-authentication and public deployment are not included.
+research-memory queries, structured prior-art checks, Alpaca historical import,
+internal Paper Arena operations, and explicitly simulated Alpaca Paper actions.
+It cannot edit authoritative metrics, findings, or gate results and has no
+live-money controls. It is intended for local/internal use; authentication and
+public deployment are not included.
 
 Documentation:
 
@@ -87,6 +88,7 @@ Documentation:
 - [Functional user guide](docs/user-guide.md)
 - [Alpaca Basic and Paper guide](docs/alpaca-paper-guide.md)
 - [Complete curl guide](docs/api-curl-guide.md)
+- [First real SPY 50/200 research run](docs/first-real-research-run.md)
 - [Bruno collection](bruno/README.md)
 - Interactive OpenAPI: `http://127.0.0.1:8000/docs`
 - Dashboard: `http://127.0.0.1:8000/dashboard/`
@@ -234,6 +236,14 @@ prior-art checks can identify exact duplicates and materially similar work.
 
 `REJECTED` does not mean universally invalid. It applies to the recorded market,
 instrument, timeframe, period, parameters, costs, and validation evidence.
+
+## Operator research workflow
+
+The dashboard, REST API, curl guide, and Bruno collection support the complete
+DatasetSnapshot → Hypothesis → StrategyVersion → Experiment → deterministic
+BACKTEST run without direct Python or PostgreSQL access. Start with the
+[SPY 50/200 walkthrough](docs/first-real-research-run.md). Later validation
+execution remains explicit rather than relying on hidden operator defaults.
 
 ## Paper Arena
 

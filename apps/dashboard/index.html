@@ -9,7 +9,7 @@
 <body>
   <header>
     <div><span class="eyebrow">RESEARCH OPERATIONS</span><h1>Quant Lab</h1></div>
-    <nav><a href="/dashboard/">Overview</a><a href="#market-data">Market Data</a><a href="#alpaca-paper">Alpaca Paper</a><a href="#paper-arena">Paper Arena</a><a href="#knowledge">Knowledge</a><a href="/docs">OpenAPI</a></nav>
+    <nav><a href="/dashboard/">Overview</a><a href="#research-workflow">New Research</a><a href="#market-data">Market Data</a><a href="#alpaca-paper">Alpaca Paper</a><a href="#paper-arena">Paper Arena</a><a href="#knowledge">Knowledge</a><a href="/docs">OpenAPI</a></nav>
   </header>
   <main>
     <div id="error" class="error hidden"></div>
@@ -19,6 +19,41 @@
       <div class="panel">
         <div class="section-heading"><h2>Experiments</h2><span class="muted">Newest first</span></div>
         <div id="experiments" class="empty">Loading experiments…</div>
+      </div>
+      <div id="research-workflow" class="panel">
+        <div class="section-heading"><div><span class="eyebrow">OPERATOR WORKFLOW</span><h2>New SPY 50/200 research</h2></div><span class="muted">Create lineage, then run deterministic research</span></div>
+        <h3>1 · New hypothesis</h3>
+        <form id="hypothesis-create-form" class="prior-form">
+          <label>Title<input name="title" required value="SPY daily 50/200 trend"></label>
+          <label>Description<input name="description" required value="Evaluate a 50/200 moving-average trend rule on SPY daily bars."></label>
+          <label>Rationale<input name="rationale" required value="Persistent trends may survive realistic execution costs."></label>
+          <label>Dataset domain<input value="SPY · US_EQUITIES · 1Day" disabled></label>
+          <button type="submit">Create hypothesis</button><button type="button" class="secondary copy-research-curl" data-action="hypothesis">Copy curl</button>
+        </form>
+        <h3>2 · New StrategyVersion</h3>
+        <form id="strategy-create-form" class="prior-form">
+          <label>Algorithm<select name="algorithm_key"><option value="moving_average_trend">moving_average_trend</option></select></label>
+          <label>Short window<input name="short_window" type="number" min="1" required value="50"></label>
+          <label>Long window<input name="long_window" type="number" min="2" required value="200"></label>
+          <label>Git commit<input name="git_commit" required value="operator-created"></label>
+          <button type="submit">Create StrategyVersion</button><button type="button" class="secondary copy-research-curl" data-action="strategy">Copy curl</button>
+        </form>
+        <h3>3 · New experiment</h3>
+        <form id="experiment-create-form" class="prior-form">
+          <label>DatasetSnapshot<select id="research-dataset" name="dataset_snapshot_id" required></select></label>
+          <label>Hypothesis ID<input id="research-hypothesis-id" name="hypothesis_id" required></label>
+          <label>StrategyVersion ID<input id="research-version-id" name="strategy_version_id" required></label>
+          <button type="submit">Create experiment</button><button type="button" class="secondary copy-research-curl" data-action="experiment">Copy curl</button>
+        </form>
+        <h3>4 · Run experiment</h3>
+        <form id="experiment-run-form" class="prior-form">
+          <label>Experiment ID<input id="research-experiment-id" name="experiment_id" required></label>
+          <label>Initial cash<input name="initial_cash" type="number" min="1" value="10000"></label>
+          <label>Fee rate<input name="fee_rate" type="number" min="0" step="0.0001" value="0.001"></label>
+          <label>Slippage (bps)<input name="slippage_bps" type="number" min="0" step="1" value="10"></label>
+          <button type="submit">Run experiment</button><button type="button" class="secondary copy-research-curl" data-action="run">Copy curl</button>
+        </form>
+        <pre id="research-result" class="result hidden"></pre>
       </div>
       <div id="market-data" class="panel">
         <div class="section-heading"><h2>Market Data / Datasets</h2><span class="badge">ALPACA IEX · DAILY</span></div>

@@ -1,0 +1,5 @@
+meta { name: Create MA 50/200 StrategyVersion type: http seq: 1 }
+post { url: {{baseUrl}}/api/v1/strategy-versions body: json auth: none }
+body:json { {"name":"SPY MA Trend","description":"Moving-average trend strategy","strategy_family":"moving_average_trend","version":"v1","git_commit":"operator-created","algorithm_key":"moving_average_trend","parameters":{"short_window":50,"long_window":200}} }
+script:post-response { if (res.status === 201) { bru.setEnvVar("versionId", res.body.strategy_version_id); } }
+tests { test("version created", function () { expect(res.status).to.equal(201); expect(res.body.strategy_version_id).to.exist; }); }

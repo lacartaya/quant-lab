@@ -38,6 +38,7 @@ from quant.application import (
     ImportHistoricalDataset,
     LoadDatasetSnapshot,
     OperatorQueries,
+    OperatorResearchWorkflow,
     PaperLifecycle,
     ProcessPaperBar,
 )
@@ -93,6 +94,27 @@ def get_dataset_services(
 
 
 DatasetDependency = Annotated[DatasetServices, Depends(get_dataset_services)]
+
+
+def get_research_workflow(
+    session: Annotated[Session, Depends(get_session)],
+) -> OperatorResearchWorkflow:
+    datasets = SQLAlchemyDatasetRepository(session)
+    return OperatorResearchWorkflow(
+        hypotheses=SQLAlchemyHypothesisRepository(session),
+        knowledge=SQLAlchemyKnowledgeRepository(session),
+        strategies=SQLAlchemyStrategyRepository(session),
+        datasets=datasets,
+        experiments=SQLAlchemyExperimentRepository(session),
+        dataset_loader=LoadDatasetSnapshot(
+            LocalParquetDatasetStorage(dataset_storage_path()), datasets
+        ),
+    )
+
+
+ResearchDependency = Annotated[
+    OperatorResearchWorkflow, Depends(get_research_workflow)
+]
 
 
 @dataclass(frozen=True, slots=True)

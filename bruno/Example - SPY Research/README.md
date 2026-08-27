@@ -6,9 +6,14 @@ Run the committed requests in this order:
 2. `01 - Market Data/Import SPY Daily`
 3. `02 - Datasets/Get Dataset`
 4. `04 - Prior Art/Check Prior Art`
-5. Select existing hypothesis/version/experiment/run IDs in the environment.
-6. Run folders 03, 05, 06, 07, 08, 09, and 10 in order.
-7. If an existing gate is PASS, run `12 - Paper Arena`.
+5. `03 - Hypotheses/Create Hypothesis` (captures `hypothesisId`).
+6. `05 - Strategies/Create StrategyVersion` (captures `versionId`).
+7. `06 - Experiments/Create Experiment` (captures `experimentId`).
+8. `06 - Experiments/Run Experiment` (captures `runId` and BACKTEST `validationId`).
+9. `07 - Experiment Runs/Get Run` and `08 - Validations/List All Validations`.
+10. Inspect the automatically persisted BACKTEST validation.
 
-Hypothesis, StrategyVersion, experiment creation, and validation execution are
-not public writes in this API release, so this flow does not invent them.
+The HTTP API does not yet expose the OOS, walk-forward, sensitivity, stress,
+Monte Carlo, adversarial-generation, or gate-evaluation application services.
+Their existing evidence remains readable through folders 08–10. This sequence
+does not invent hidden validation or gate configuration.

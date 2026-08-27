@@ -1,0 +1,5 @@
+meta { name: Create SPY 50/200 hypothesis type: http seq: 1 }
+post { url: {{baseUrl}}/api/v1/hypotheses body: json auth: none }
+body:json { {"title":"SPY daily 50/200 trend","description":"Evaluate a 50/200 moving-average trend rule on SPY daily bars.","rationale":"Persistent trends may survive realistic execution costs.","strategy_family":"moving_average_trend","market":"US_EQUITIES","instrument":"SPY","timeframe":"1Day","parameters":{"short_window":50,"long_window":200},"expected_benefit":"Transparent trend participation","expected_tradeoff":"Whipsaw and delayed entries","success_criteria":"Reproducible validation evidence","rejection_criteria":"Insufficient robust evidence","numeric_parameter_relative_tolerance":0.02} }
+script:post-response { if (res.status === 201) { bru.setEnvVar("hypothesisId", res.body.id); } }
+tests { test("hypothesis created", function () { expect(res.status).to.equal(201); expect(res.body.id).to.exist; }); }

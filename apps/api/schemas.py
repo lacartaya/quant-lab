@@ -116,6 +116,89 @@ class HypothesisListResponse(BaseModel):
     page: PageMetadata
 
 
+class CreateHypothesisRequest(BaseModel):
+    title: str = Field(min_length=1)
+    description: str = Field(min_length=1)
+    rationale: str = Field(min_length=1)
+    strategy_family: str = Field(min_length=1)
+    market: str = Field(min_length=1)
+    instrument: str = Field(min_length=1)
+    timeframe: str = Field(min_length=1)
+    parameters: dict[str, Any]
+    expected_benefit: str = Field(min_length=1)
+    expected_tradeoff: str = Field(min_length=1)
+    success_criteria: str = Field(min_length=1)
+    rejection_criteria: str = Field(min_length=1)
+    reconsideration_conditions: str | None = None
+    numeric_parameter_relative_tolerance: float = Field(default=0.02, ge=0, le=1)
+    derived_from_hypothesis_id: UUID | None = None
+
+
+class CreateStrategyVersionRequest(BaseModel):
+    name: str = Field(min_length=1)
+    description: str = Field(min_length=1)
+    strategy_family: str = Field(min_length=1)
+    version: str = Field(min_length=1)
+    git_commit: str = Field(min_length=1)
+    algorithm_key: str = Field(min_length=1)
+    parameters: dict[str, Any]
+
+
+class StrategyVersionCreateResponse(BaseModel):
+    strategy_id: UUID
+    strategy_version_id: UUID
+    name: str
+    version: str
+    algorithm_key: str
+    parameters: dict[str, Any]
+    created_at: datetime
+
+
+class CreateExperimentRequest(BaseModel):
+    hypothesis_id: UUID
+    strategy_version_id: UUID
+    dataset_snapshot_id: UUID
+
+
+class CreateExperimentResponse(BaseModel):
+    experiment_id: UUID
+    hypothesis_id: UUID
+    strategy_version_id: UUID
+    dataset_snapshot_id: UUID
+    status: str
+    created_at: datetime
+
+
+class FeeConfigurationRequest(BaseModel):
+    model: Literal["zero", "percentage"]
+    rate: Decimal | None = Field(default=None, ge=0)
+
+
+class SlippageConfigurationRequest(BaseModel):
+    model: Literal["zero", "basis_points"]
+    basis_points: Decimal | None = Field(default=None, ge=0, lt=10_000)
+
+
+class RunExperimentRequest(BaseModel):
+    initial_cash: Decimal = Field(gt=0)
+    position_fraction: Decimal = Field(gt=0, le=1)
+    fee: FeeConfigurationRequest
+    slippage: SlippageConfigurationRequest
+    periods_per_year: int = Field(gt=0)
+    annual_risk_free_rate: Decimal = Field(default=Decimal(0), gt=-1)
+
+
+class RunExperimentResponse(BaseModel):
+    experiment_id: UUID
+    experiment_run_id: UUID
+    dataset_snapshot_id: UUID
+    strategy_version_id: UUID
+    status: str
+    configuration: dict[str, Any]
+    result_fingerprint: str
+    validation_ids: list[UUID]
+
+
 class HypothesisDetailResponse(BaseModel):
     hypothesis: dict[str, Any]
     experiments: list[dict[str, Any]]

@@ -14,6 +14,7 @@ from apps.api.dependencies import (
     get_dataset_services,
     get_operator_queries,
     get_paper_services,
+    get_research_workflow,
 )
 from apps.api.main import app
 from quant.application import (
@@ -264,6 +265,71 @@ def fixture() -> tuple[Mock, FixtureValues]:
     }
 
 
+def test_research_write_endpoints_map_application_results() -> None:
+    _, values = fixture()
+    hypothesis = values["hypothesis"]
+    version = values["version"]
+    strategy = Strategy(version.strategy_id, "SPY MA", "Description", "trend", NOW)
+    experiment = Experiment(
+        values["experiment"].id,
+        hypothesis.id,
+        version.id,
+        IDS[3],
+        ExperimentStatus.CREATED,
+        NOW,
+    )
+    workflow = Mock()
+    workflow.create_hypothesis.return_value = hypothesis
+    workflow.create_strategy_version.return_value = (strategy, version)
+    workflow.create_experiment.return_value = experiment
+    app.dependency_overrides[get_research_workflow] = lambda: workflow
+    try:
+        with TestClient(app) as client:
+            hypothesis_response = client.post(
+                "/api/v1/hypotheses",
+                json={
+                    "title": "SPY trend",
+                    "description": "Description",
+                    "rationale": "Rationale",
+                    "strategy_family": "moving_average_trend",
+                    "market": "US_EQUITIES",
+                    "instrument": "SPY",
+                    "timeframe": "1Day",
+                    "parameters": {"short_window": 50, "long_window": 200},
+                    "expected_benefit": "Benefit",
+                    "expected_tradeoff": "Tradeoff",
+                    "success_criteria": "Success",
+                    "rejection_criteria": "Reject",
+                },
+            )
+            assert hypothesis_response.status_code == 201
+            version_response = client.post(
+                "/api/v1/strategy-versions",
+                json={
+                    "name": "SPY MA",
+                    "description": "Description",
+                    "strategy_family": "moving_average_trend",
+                    "version": "v1",
+                    "git_commit": "abc",
+                    "algorithm_key": "moving_average_trend",
+                    "parameters": {"short_window": 50, "long_window": 200},
+                },
+            )
+            assert version_response.status_code == 201
+            assert version_response.json()["strategy_version_id"] == str(version.id)
+            experiment_response = client.post(
+                "/api/v1/experiments",
+                json={
+                    "hypothesis_id": str(hypothesis.id),
+                    "strategy_version_id": str(version.id),
+                    "dataset_snapshot_id": str(IDS[3]),
+                },
+            )
+            assert experiment_response.status_code == 201
+    finally:
+        app.dependency_overrides.clear()
+
+
 def test_dataset_and_alpaca_paper_api_never_expose_credentials() -> None:
     queries, _ = fixture()
     snapshot = queries.list_datasets.return_value[0]
@@ -377,6 +443,8 @@ def test_health_and_dashboard_smoke() -> None:
         assert "Market Data / Datasets" in dashboard.text
         assert "PAPER / SIMULATED" in dashboard.text
         assert "View / copy curl" in dashboard.text
+        assert "New SPY 50/200 research" in dashboard.text
+        assert "Create StrategyVersion" in dashboard.text
         assert "No gate evaluation" in client.get("/dashboard/app.js").text
     app.dependency_overrides.clear()
 

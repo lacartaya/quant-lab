@@ -1,0 +1,5 @@
+meta { name: Create experiment type: http seq: 1 }
+post { url: {{baseUrl}}/api/v1/experiments body: json auth: none }
+body:json { {"hypothesis_id":"{{hypothesisId}}","strategy_version_id":"{{versionId}}","dataset_snapshot_id":"{{snapshotId}}"} }
+script:post-response { if (res.status === 201) { bru.setEnvVar("experimentId", res.body.experiment_id); } }
+tests { test("experiment created", function () { expect(res.status).to.equal(201); expect(res.body.experiment_id).to.exist; }); }

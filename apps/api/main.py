@@ -12,6 +12,7 @@ from apps.api.dependencies import (
     DatasetDependency,
     OperatorDependency,
     PaperDependency,
+    ResearchDependency,
 )
 from apps.api.mappers import (
     experiment_detail,
@@ -30,7 +31,11 @@ from apps.api.schemas import (
     AlpacaPaperFillResponse,
     AlpacaPaperOrderResponse,
     AlpacaPaperPositionResponse,
+    CreateExperimentRequest,
+    CreateExperimentResponse,
+    CreateHypothesisRequest,
     CreatePaperSessionRequest,
+    CreateStrategyVersionRequest,
     DashboardSummaryResponse,
     DatasetSnapshotListResponse,
     DatasetSnapshotResponse,
@@ -41,6 +46,7 @@ from apps.api.schemas import (
     HistoricalImportRequest,
     HypothesisDetailResponse,
     HypothesisListResponse,
+    HypothesisResponse,
     KnowledgeListResponse,
     PageMetadata,
     PaperArtifactListResponse,
@@ -50,6 +56,9 @@ from apps.api.schemas import (
     PaperSessionResponse,
     PriorArtRequest,
     PriorArtResponse,
+    RunExperimentRequest,
+    RunExperimentResponse,
+    StrategyVersionCreateResponse,
     SubmitAlpacaPaperOrderRequest,
     ValidationResponse,
 )
@@ -58,7 +67,24 @@ from infra.alpaca import (
     AlpacaConfigurationError,
     AlpacaLiveMarketDataProvider,
 )
-from quant.application import CheckPriorArt, OperatorResourceNotFound, PaperArenaError
+from quant.analytics import AnalyticsConfiguration
+from quant.application import (
+    CheckPriorArt,
+    DuplicateHypothesisError,
+    OperatorResourceNotFound,
+    PaperArenaError,
+    RejectedPriorArtError,
+    UnsupportedVersionError,
+)
+from quant.backtest import (
+    BacktestConfiguration,
+    BasisPointsSlippageModel,
+    FeeModel,
+    PercentageFeeModel,
+    SlippageModel,
+    ZeroFeeModel,
+    ZeroSlippageModel,
+)
 from quant.domain import (
     AdjustmentPolicy,
     ExperimentStatus,
@@ -86,6 +112,22 @@ app = FastAPI(
         "real-money execution capability."
     ),
 )
+
+
+@app.exception_handler(DuplicateHypothesisError)
+@app.exception_handler(RejectedPriorArtError)
+async def research_conflict_handler(request: Request, error: Exception) -> JSONResponse:
+    del request
+    return JSONResponse(status_code=409, content={"detail": str(error)})
+
+
+@app.exception_handler(UnsupportedVersionError)
+@app.exception_handler(ValueError)
+async def invalid_research_request_handler(
+    request: Request, error: Exception
+) -> JSONResponse:
+    del request
+    return JSONResponse(status_code=422, content={"detail": str(error)})
 
 
 @app.exception_handler(OperatorResourceNotFound)
@@ -260,6 +302,98 @@ def list_experiments(
     )
 
 
+@app.post(
+    "/api/v1/experiments",
+    response_model=CreateExperimentResponse,
+    status_code=201,
+    tags=["experiments"],
+    summary="Create an experiment from immutable research lineage",
+    description=(
+        "Binds one existing hypothesis, StrategyVersion, and DatasetSnapshot. "
+        "No backtest is executed by this operation."
+    ),
+)
+def create_experiment(
+    request: CreateExperimentRequest, workflow: ResearchDependency
+) -> CreateExperimentResponse:
+    experiment = workflow.create_experiment(
+        hypothesis_id=request.hypothesis_id,
+        strategy_version_id=request.strategy_version_id,
+        dataset_snapshot_id=request.dataset_snapshot_id,
+    )
+    return CreateExperimentResponse(
+        experiment_id=experiment.id,
+        hypothesis_id=experiment.hypothesis_id,
+        strategy_version_id=experiment.strategy_version_id,
+        dataset_snapshot_id=experiment.dataset_snapshot_id,
+        status=experiment.status.value,
+        created_at=experiment.created_at,
+    )
+
+
+@app.post(
+    "/api/v1/experiments/{experiment_id}/runs",
+    response_model=RunExperimentResponse,
+    status_code=201,
+    tags=["experiments"],
+    summary="Run a deterministic historical experiment",
+    description=(
+        "Delegates to the existing RunExperiment application service and persists "
+        "the ExperimentRun plus its BACKTEST validation evidence."
+    ),
+)
+def run_experiment(
+    experiment_id: UUID,
+    request: RunExperimentRequest,
+    workflow: ResearchDependency,
+) -> RunExperimentResponse:
+    fee_model: FeeModel
+    if request.fee.model == "zero":
+        if request.fee.rate not in (None, 0):
+            raise ValueError("zero fee model cannot include a non-zero rate")
+        fee_model = ZeroFeeModel()
+    else:
+        if request.fee.rate is None:
+            raise ValueError("percentage fee model requires rate")
+        fee_model = PercentageFeeModel(request.fee.rate)
+    slippage_model: SlippageModel
+    if request.slippage.model == "zero":
+        if request.slippage.basis_points not in (None, 0):
+            raise ValueError("zero slippage model cannot include basis_points")
+        slippage_model = ZeroSlippageModel()
+    else:
+        if request.slippage.basis_points is None:
+            raise ValueError("basis_points slippage model requires basis_points")
+        slippage_model = BasisPointsSlippageModel(request.slippage.basis_points)
+    result = workflow.run_experiment(
+        experiment_id,
+        BacktestConfiguration(
+            initial_cash=request.initial_cash,
+            position_fraction=request.position_fraction,
+            fee_model=fee_model,
+            slippage_model=slippage_model,
+        ),
+        AnalyticsConfiguration(
+            periods_per_year=request.periods_per_year,
+            annual_risk_free_rate=request.annual_risk_free_rate,
+        ),
+    )
+    run = workflow.experiments.get_run(result.experiment_run_id)
+    if run is None:
+        raise RuntimeError("completed experiment run was not persisted")
+    validations = workflow.experiments.list_validations(result.experiment_run_id)
+    return RunExperimentResponse(
+        experiment_id=result.experiment_id,
+        experiment_run_id=result.experiment_run_id,
+        dataset_snapshot_id=result.dataset_snapshot_id,
+        strategy_version_id=result.strategy_version_id,
+        status=run.status.value,
+        configuration=json_value(run.configuration),
+        result_fingerprint=result.fingerprint,
+        validation_ids=[item.id for item in validations],
+    )
+
+
 @app.get(
     "/api/v1/experiments/{experiment_id}",
     response_model=ExperimentDetailResponse,
@@ -347,6 +481,40 @@ def get_strategy_version(
     return mapped
 
 
+@app.post(
+    "/api/v1/strategy-versions",
+    response_model=StrategyVersionCreateResponse,
+    status_code=201,
+    tags=["strategies"],
+    summary="Create an immutable executable StrategyVersion",
+    description=(
+        "Creates the strategy container and its first immutable version after "
+        "validating the algorithm key and parameters against the executable registry."
+    ),
+)
+def create_strategy_version(
+    request: CreateStrategyVersionRequest, workflow: ResearchDependency
+) -> StrategyVersionCreateResponse:
+    strategy, version = workflow.create_strategy_version(
+        name=request.name,
+        description=request.description,
+        strategy_family=request.strategy_family,
+        version=request.version,
+        git_commit=request.git_commit,
+        algorithm_key=request.algorithm_key,
+        parameters=request.parameters,
+    )
+    return StrategyVersionCreateResponse(
+        strategy_id=strategy.id,
+        strategy_version_id=version.id,
+        name=strategy.name,
+        version=version.version,
+        algorithm_key=version.algorithm_key,
+        parameters=json_value(version.parameters),
+        created_at=version.created_at,
+    )
+
+
 @app.get(
     "/api/v1/hypotheses", response_model=HypothesisListResponse, tags=["hypotheses"]
 )
@@ -373,6 +541,42 @@ def list_hypotheses(
         items=[hypothesis(item) for item in items],
         page=PageMetadata(limit=limit, offset=offset, returned=len(items)),
     )
+
+
+@app.post(
+    "/api/v1/hypotheses",
+    response_model=HypothesisResponse,
+    status_code=201,
+    tags=["hypotheses"],
+    summary="Register an active research hypothesis",
+    description=(
+        "Runs deterministic prior-art checks before persisting the hypothesis and "
+        "its initial knowledge record. Exact duplicates return HTTP 409."
+    ),
+)
+def create_hypothesis(
+    request: CreateHypothesisRequest, workflow: ResearchDependency
+) -> HypothesisResponse:
+    created = workflow.create_hypothesis(
+        title=request.title,
+        description=request.description,
+        rationale=request.rationale,
+        strategy_family=request.strategy_family,
+        market=request.market,
+        instrument=request.instrument,
+        timeframe=request.timeframe,
+        parameters=request.parameters,
+        expected_benefit=request.expected_benefit,
+        expected_tradeoff=request.expected_tradeoff,
+        success_criteria=request.success_criteria,
+        rejection_criteria=request.rejection_criteria,
+        reconsideration_conditions=request.reconsideration_conditions,
+        numeric_parameter_relative_tolerance=(
+            request.numeric_parameter_relative_tolerance
+        ),
+        derived_from_hypothesis_id=request.derived_from_hypothesis_id,
+    )
+    return hypothesis(created)
 
 
 @app.get(

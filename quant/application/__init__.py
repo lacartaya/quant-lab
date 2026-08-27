@@ -59,6 +59,10 @@ from quant.application.operator_queries import (
     OperatorQueries,
     OperatorResourceNotFound,
 )
+from quant.application.operator_research import (
+    OperatorResearchWorkflow,
+    ResearchResourceNotFound,
+)
 from quant.application.paper_arena import (
     HISTORICAL_TO_PAPER_POLICY,
     PAPER_ENGINE_VERSION,
@@ -122,6 +126,8 @@ __all__ = [
     "ImportHistoricalDataset",
     "OperatorQueries",
     "OperatorResourceNotFound",
+    "OperatorResearchWorkflow",
+    "ResearchResourceNotFound",
     "PAPER_ENGINE_VERSION",
     "REPLAY_PROVIDER_VERSION",
     "HISTORICAL_TO_PAPER_POLICY",
