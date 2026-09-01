@@ -11,6 +11,8 @@ Arena, and Alpaca Paper. IDs are environment variables. Import captures
 `snapshotId`; research creation captures `hypothesisId`, `versionId`,
 `experimentId`, `runId`, and the BACKTEST `validationId`; paper operations
 capture their own returned IDs.
+Paper promotion captures `paperPromotionId`; the acceptance flow also captures
+`paperSessionId` and `paperParticipantId`.
 
 ## Example - SPY Research
 
@@ -20,6 +22,9 @@ write captures the ID required by the next request. The run captures BACKTEST
 evidence. Folders 08–10 then execute and capture OOS, walk-forward, sensitivity,
 stress, Monte Carlo, adversarial, and gate evidence. A gate failure is retained,
 not tuned away.
+After a PASS, folder 11 requires explicit Paper approval. Folder 12 then creates
+a session, admits only that promoted StrategyVersion, starts it separately, and
+inspects internal simulated Paper evidence.
 
 ## Example - Alpaca Paper Trading
 

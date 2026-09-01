@@ -25,6 +25,7 @@ from infra.persistence.repositories import (
     SQLAlchemyGateRepository,
     SQLAlchemyHypothesisRepository,
     SQLAlchemyKnowledgeRepository,
+    SQLAlchemyPaperPromotionRepository,
     SQLAlchemyPaperRepository,
     SQLAlchemyStrategyRepository,
 )
@@ -41,6 +42,7 @@ from quant.application import (
     OperatorQueries,
     OperatorResearchWorkflow,
     PaperLifecycle,
+    PaperPromotionService,
     ProcessPaperBar,
     RunAdversarialValidation,
     RunMonteCarloValidation,
@@ -178,6 +180,8 @@ class PaperServices:
     lifecycle: PaperLifecycle
     advance: AdvanceReplaySession
     compare: ComparePaperParticipants
+    promotions: SQLAlchemyPaperPromotionRepository
+    promotion_service: PaperPromotionService
     advance_live: AdvanceLiveSession | None = None
 
 
@@ -186,6 +190,7 @@ def get_paper_services(
 ) -> PaperServices:
     datasets = SQLAlchemyDatasetRepository(session)
     papers = SQLAlchemyPaperRepository(session)
+    promotions = SQLAlchemyPaperPromotionRepository(session)
     loader = LoadDatasetSnapshot(
         LocalParquetDatasetStorage(dataset_storage_path()), datasets
     )
@@ -195,7 +200,7 @@ def get_paper_services(
         create_session=CreatePaperSession(datasets, loader, papers),
         add_participant=AddPaperParticipant(
             papers,
-            SQLAlchemyGateRepository(session),
+            promotions,
             SQLAlchemyExperimentRepository(session),
             SQLAlchemyStrategyRepository(session),
         ),
@@ -208,6 +213,15 @@ def get_paper_services(
         ),
         advance_live=AdvanceLiveSession(papers, processor),
         compare=ComparePaperParticipants(papers),
+        promotions=promotions,
+        promotion_service=PaperPromotionService(
+            promotions,
+            SQLAlchemyExperimentRepository(session),
+            SQLAlchemyGateRepository(session),
+            SQLAlchemyStrategyRepository(session),
+            datasets,
+            loader,
+        ),
     )
 
 

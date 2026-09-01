@@ -417,7 +417,52 @@ class CreatePaperSessionRequest(BaseModel):
 
 
 class AddPaperParticipantRequest(BaseModel):
-    gate_evaluation_id: UUID
+    paper_promotion_id: UUID
+    strategy_version_id: UUID | None = None
+    broker_target: None = None
+
+
+class ApprovePaperPromotionRequest(BaseModel):
+    confirm: bool
+    validation_gate_id: UUID
+    reason: str
+    approval_actor: str = "local-operator"
+
+
+class RevokePaperPromotionRequest(BaseModel):
+    confirm: bool
+    reason: str
+    approval_actor: str = "local-operator"
+
+
+class PaperPromotionResponse(BaseModel):
+    id: UUID
+    hypothesis_id: UUID
+    strategy_version_id: UUID
+    experiment_id: UUID
+    experiment_run_id: UUID
+    validation_gate_id: UUID
+    dataset_snapshot_id: UUID
+    gate_policy_id: str
+    gate_policy_version: int
+    gate_decision: str
+    status: str
+    reason: str
+    approval_actor: str
+    requested_at: datetime
+    approved_at: datetime
+    created_at: datetime
+    revoked_at: datetime | None
+    revoked_by: str | None
+    revocation_reason: str | None
+
+
+class PaperPromotionEligibilityResponse(BaseModel):
+    eligible: bool
+    reason: str
+    experiment_run_id: UUID
+    validation_gate_id: UUID | None
+    strategy_version_id: UUID | None
 
 
 class PaperSessionResponse(BaseModel):
@@ -445,6 +490,7 @@ class PaperParticipantResponse(BaseModel):
     session_id: UUID
     strategy_version_id: UUID
     source_gate_evaluation_id: UUID
+    paper_promotion_id: UUID | None
     status: str
     initial_capital: float
     paper_engine_version: str

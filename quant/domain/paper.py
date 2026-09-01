@@ -94,6 +94,7 @@ class PaperParticipant:
     last_successful_at: datetime | None
     last_error: str | None
     created_at: datetime
+    paper_promotion_id: UUID | None = None
 
     def __post_init__(self) -> None:
         for name in (
@@ -103,6 +104,8 @@ class PaperParticipant:
             "source_gate_evaluation_id",
         ):
             require_uuid(getattr(self, name), name)
+        if self.paper_promotion_id is not None:
+            require_uuid(self.paper_promotion_id, "paper_promotion_id")
         require_enum(self.status, PaperParticipantStatus, "status")
         require_text(self.paper_engine_version, "paper_engine_version")
         if not self.initial_capital.is_finite() or self.initial_capital <= 0:

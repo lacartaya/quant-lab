@@ -35,6 +35,7 @@ from apps.api.schemas import (
     AlpacaPaperFillResponse,
     AlpacaPaperOrderResponse,
     AlpacaPaperPositionResponse,
+    ApprovePaperPromotionRequest,
     BacktestVisualizationResponse,
     CreateExperimentRequest,
     CreateExperimentResponse,
@@ -61,11 +62,14 @@ from apps.api.schemas import (
     PaperArtifactListResponse,
     PaperParticipantResponse,
     PaperProcessingResponse,
+    PaperPromotionEligibilityResponse,
+    PaperPromotionResponse,
     PaperSessionDetailResponse,
     PaperSessionResponse,
     ParameterSensitivityRequest,
     PriorArtRequest,
     PriorArtResponse,
+    RevokePaperPromotionRequest,
     RunExperimentRequest,
     RunExperimentResponse,
     StrategyVersionCreateResponse,
@@ -87,6 +91,7 @@ from quant.application import (
     DuplicateHypothesisError,
     OperatorResourceNotFound,
     PaperArenaError,
+    PaperPromotionError,
     RejectedPriorArtError,
     UnsupportedVersionError,
     dataset_quality,
@@ -109,6 +114,7 @@ from quant.domain import (
     PaperOrderSide,
     PaperOrderType,
     PaperParticipant,
+    PaperPromotion,
     PaperSession,
     PaperTimeInForce,
     SubmitAlpacaPaperOrder,
@@ -175,6 +181,7 @@ async def lookup_error_handler(request: Request, error: LookupError) -> JSONResp
 
 
 @app.exception_handler(PaperArenaError)
+@app.exception_handler(PaperPromotionError)
 async def paper_error_handler(request: Request, error: PaperArenaError) -> JSONResponse:
     del request
     return JSONResponse(status_code=409, content={"detail": str(error)})
@@ -971,6 +978,7 @@ def _paper_participant(
         session_id=value.session_id,
         strategy_version_id=value.strategy_version_id,
         source_gate_evaluation_id=value.source_gate_evaluation_id,
+        paper_promotion_id=value.paper_promotion_id,
         status=value.status.value,
         initial_capital=float(value.initial_capital),
         paper_engine_version=value.paper_engine_version,
@@ -1009,6 +1017,128 @@ def _paper_session(
         last_error=value.last_error,
         created_at=value.created_at,
         participant_count=len(papers.repository.list_participants(value.id)),
+    )
+
+
+def _paper_promotion(value: PaperPromotion) -> PaperPromotionResponse:
+    return PaperPromotionResponse(**asdict(value))
+
+
+@app.get(
+    "/api/v1/experiment-runs/{run_id}/paper-promotion-eligibility",
+    response_model=PaperPromotionEligibilityResponse,
+    tags=["paper-promotions"],
+    summary="Inspect deterministic Paper promotion eligibility",
+    description=(
+        "Evaluates immutable run, HISTORICAL_TO_PAPER gate, StrategyVersion, "
+        "and DatasetSnapshot lineage. It creates no approval and starts no "
+        "Paper session."
+    ),
+    responses={
+        404: {"description": "ExperimentRun not found"},
+        422: {"description": "Invalid identifier or request"},
+    },
+)
+def get_paper_promotion_eligibility(
+    run_id: UUID, papers: PaperDependency, validation_gate_id: UUID | None = None
+) -> PaperPromotionEligibilityResponse:
+    return PaperPromotionEligibilityResponse(
+        **asdict(papers.promotion_service.eligibility(run_id, validation_gate_id))
+    )
+
+
+@app.post(
+    "/api/v1/experiment-runs/{run_id}/paper-promotions",
+    response_model=PaperPromotionResponse,
+    tags=["paper-promotions"],
+    summary="Explicitly approve an ExperimentRun for Paper",
+    description=(
+        "Requires confirm=true and a passing exact HISTORICAL_TO_PAPER gate. "
+        "Persists immutable approval lineage only; it does not create/start a "
+        "session or submit any broker order. An identical approved request "
+        "returns the existing promotion."
+    ),
+    responses={
+        404: {"description": "Run or lineage resource not found"},
+        409: {"description": "Confirmation, eligibility, or revoked-lineage conflict"},
+        422: {"description": "Invalid typed request"},
+    },
+)
+def approve_paper_promotion(
+    run_id: UUID, request: ApprovePaperPromotionRequest, papers: PaperDependency
+) -> PaperPromotionResponse:
+    return _paper_promotion(
+        papers.promotion_service.approve(
+            run_id,
+            request.validation_gate_id,
+            confirm=request.confirm,
+            reason=request.reason,
+            actor=request.approval_actor,
+        )
+    )
+
+
+@app.get(
+    "/api/v1/paper-promotions",
+    response_model=list[PaperPromotionResponse],
+    tags=["paper-promotions"],
+    summary="List Paper promotions",
+    description=(
+        "Lists auditable approvals and revocations without rewriting historical "
+        "gate evidence."
+    ),
+)
+def list_paper_promotions(papers: PaperDependency) -> list[PaperPromotionResponse]:
+    return [_paper_promotion(item) for item in papers.promotions.list_all()]
+
+
+@app.get(
+    "/api/v1/paper-promotions/{promotion_id}",
+    response_model=PaperPromotionResponse,
+    tags=["paper-promotions"],
+    summary="Get one Paper promotion",
+    description=(
+        "Returns the immutable research and gate lineage captured at approval time."
+    ),
+    responses={
+        404: {"description": "PaperPromotion not found"},
+        422: {"description": "Invalid identifier"},
+    },
+)
+def get_paper_promotion(
+    promotion_id: UUID, papers: PaperDependency
+) -> PaperPromotionResponse:
+    promotion = papers.promotions.get(promotion_id)
+    if promotion is None:
+        raise LookupError(f"paper promotion {promotion_id} was not found")
+    return _paper_promotion(promotion)
+
+
+@app.post(
+    "/api/v1/paper-promotions/{promotion_id}/revoke",
+    response_model=PaperPromotionResponse,
+    tags=["paper-promotions"],
+    summary="Revoke a Paper promotion",
+    description=(
+        "Prevents new participant admission while preserving the approval, gate "
+        "evidence, and existing Paper evidence."
+    ),
+    responses={
+        404: {"description": "PaperPromotion not found"},
+        409: {"description": "Explicit confirmation required"},
+        422: {"description": "Invalid typed request"},
+    },
+)
+def revoke_paper_promotion(
+    promotion_id: UUID, request: RevokePaperPromotionRequest, papers: PaperDependency
+) -> PaperPromotionResponse:
+    return _paper_promotion(
+        papers.promotion_service.revoke(
+            promotion_id,
+            confirm=request.confirm,
+            reason=request.reason,
+            actor=request.approval_actor,
+        )
     )
 
 
@@ -1060,7 +1190,13 @@ def add_paper_participant(
     papers: PaperDependency,
 ) -> PaperParticipantResponse:
     return _paper_participant(
-        papers.add_participant.execute(session_id, request.gate_evaluation_id), papers
+        papers.add_participant.execute(
+            session_id,
+            request.paper_promotion_id,
+            strategy_version_id=request.strategy_version_id,
+            broker_target=request.broker_target,
+        ),
+        papers,
     )
 
 

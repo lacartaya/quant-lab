@@ -34,3 +34,11 @@ and strategy equity beside Buy & Hold.
 
 This is historical explainability. It does not make unexecuted OOS or robustness
 stages pass and does not authorize paper or live trading.
+
+## After the historical gate
+
+A PASS makes the candidate eligible to be considered for Paper; it is not a
+guarantee and not approval. Review **Paper Promotion**, explicitly acknowledge
+the warning, approve the exact StrategyVersion, then separately create a
+replay/forward session, add the promoted participant, and start the session.
+None of these actions routes orders to Alpaca or creates a Live-money path.

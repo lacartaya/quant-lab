@@ -1,0 +1,16 @@
+meta {
+  name: Approve ExperimentRun for Paper
+  type: http
+  seq: 1
+}
+post {
+  url: {{baseUrl}}/api/v1/experiment-runs/{{runId}}/paper-promotions
+  body: json
+  auth: none
+}
+body:json {
+  {"confirm":true,"validation_gate_id":"{{gateId}}","reason":"Approved for forward-only Paper observation","approval_actor":"local-operator"}
+}
+script:post-response {
+  if (res.status === 200) bru.setEnvVar("paperPromotionId", res.body.id);
+}

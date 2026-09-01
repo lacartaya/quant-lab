@@ -11,11 +11,17 @@ from infra.persistence.repositories import (
     SQLAlchemyExperimentRepository,
     SQLAlchemyGateRepository,
     SQLAlchemyHypothesisRepository,
+    SQLAlchemyPaperPromotionRepository,
     SQLAlchemyPaperRepository,
     SQLAlchemyStrategyRepository,
 )
 from quant.analytics import AnalyticsConfiguration
-from quant.application import AddPaperParticipant, ProcessPaperBar
+from quant.application import (
+    AddPaperParticipant,
+    PaperLifecycle,
+    PaperPromotionService,
+    ProcessPaperBar,
+)
 from quant.application.dataset_snapshots import canonical_bars_checksum
 from quant.application.experiments.registry import serialize_execution_configuration
 from quant.backtest import BacktestConfiguration, ZeroFeeModel, ZeroSlippageModel
@@ -69,6 +75,7 @@ def test_paper_processing_reloads_and_continues_without_duplicate_evidence(
     experiments = SQLAlchemyExperimentRepository(postgres_session)
     gates = SQLAlchemyGateRepository(postgres_session)
     papers = SQLAlchemyPaperRepository(postgres_session)
+    promotions = SQLAlchemyPaperPromotionRepository(postgres_session)
 
     hypothesis = Hypothesis(
         uuid4(),
@@ -157,6 +164,15 @@ def test_paper_processing_reloads_and_continues_without_duplicate_evidence(
     experiments.add(experiment)
     experiments.add_run(run)
     gates.add(gate)
+    promotion = PaperPromotionService(
+        promotions, experiments, gates, strategies, datasets, lambda _: source
+    ).approve(
+        run.id,
+        gate.id,
+        confirm=True,
+        reason="integration forward-only approval",
+        actor="test-operator",
+    )
     session = PaperSession(
         uuid4(),
         source.market,
@@ -169,17 +185,18 @@ def test_paper_processing_reloads_and_continues_without_duplicate_evidence(
         snapshot.checksum,
         bars[0].timestamp,
         (),
-        PaperSessionStatus.RUNNING,
-        NOW,
+        PaperSessionStatus.CREATED,
+        None,
         None,
         None,
         None,
         NOW,
     )
     papers.add_session(session)
-    participant = AddPaperParticipant(papers, gates, experiments, strategies).execute(
-        session.id, gate.id
-    )
+    participant = AddPaperParticipant(
+        papers, promotions, experiments, strategies
+    ).execute(session.id, promotion.id)
+    PaperLifecycle(papers, clock=lambda: NOW).start_session(session.id)
     processor = ProcessPaperBar(papers, strategies)
     for item in bars[:3]:
         processor.execute(session.id, item)

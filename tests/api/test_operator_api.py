@@ -705,6 +705,8 @@ def test_paper_arena_endpoints_expose_fake_portfolio_evidence() -> None:
         lifecycle=Mock(),
         advance=Mock(),
         compare=Mock(),
+        promotions=Mock(),
+        promotion_service=Mock(),
     )
     app.dependency_overrides[get_paper_services] = lambda: papers
     with TestClient(app) as client:

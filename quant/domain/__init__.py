@@ -51,7 +51,12 @@ from quant.domain.paper_broker import (
     PaperTimeInForce,
     SubmitAlpacaPaperOrder,
 )
-from quant.domain.promotion import PromotionDecision, PromotionDecisionType
+from quant.domain.promotion import (
+    PaperPromotion,
+    PaperPromotionStatus,
+    PromotionDecision,
+    PromotionDecisionType,
+)
 from quant.domain.signal import Signal, SignalAction
 from quant.domain.strategy import Strategy, StrategyVersion
 from quant.domain.validation import (
@@ -98,6 +103,8 @@ __all__ = [
     "PaperSession",
     "PaperSessionStatus",
     "PaperSnapshot",
+    "PaperPromotion",
+    "PaperPromotionStatus",
     "AlpacaPaperAccount",
     "AlpacaPaperFill",
     "AlpacaPaperOrder",

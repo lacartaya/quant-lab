@@ -42,6 +42,10 @@ evidence. It does not promise profit and cannot trade real money.
   misleading evidence.
 - **Validation gate**: an explicit versioned policy. PASS means only that its
   rules were met, not that a strategy is safe or profitable.
+- **Paper eligible**: the exact historical candidate has a PASS gate and intact
+  lineage; no human approval has been recorded yet.
+- **Paper approved**: a local operator explicitly authorized forward-only fake-
+  capital observation. No session starts automatically.
 - **Research memory**: searchable successful and rejected work. REJECTED applies
   only to its tested domain, not everywhere forever.
 - **Paper trading**: fake-capital trading. Alpaca Paper is an external simulator;
@@ -59,9 +63,12 @@ Paper Arena, and research memory.
    block trivial repetition; similar work is evidence, not an automatic ban.
 3. Open an experiment to inspect strategy, dataset lineage, metrics, Buy & Hold,
    every separate validation, adversarial findings, and gate rules.
-4. Open **Paper Arena** to compare gate-admitted versions on independent fake
-   portfolios. No single “winner” is selected.
-5. Open **Alpaca Paper Trading** to verify the simulated account and inspect or
+4. Review **Paper Promotion** after a Gate PASS and explicitly approve the exact
+   immutable StrategyVersion. Historical validation does not guarantee future
+   performance.
+5. Open **Paper Arena** to create/select a session, add the promoted version,
+   then start it as a separate action. No single “winner” is selected.
+6. Open **Alpaca Paper Trading** to verify the simulated account and inspect or
    deliberately submit paper orders. Confirmations do not make an order real;
    they prevent accidental simulated writes.
 
@@ -70,6 +77,10 @@ directly. Experiment detail provides explicit configuration, Run, and Copy curl
 controls for every validation stage and the deterministic gate. Successful
 execution means evidence was recorded; only a gate result means policy
 eligibility.
+
+The states are deliberately distinct: historical candidate → Paper eligible →
+Paper approved → Paper active → Paper stopped/revoked. Paper remains simulated
+and cannot become Live money in this product.
 ## Understanding how your strategy actually traded
 
 From a completed experiment, choose **View backtest chart**. Candles show each

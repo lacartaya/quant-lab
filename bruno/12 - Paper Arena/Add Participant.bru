@@ -1,5 +1,5 @@
 meta {
-  name: Add gate-eligible participant
+  name: Add promoted StrategyVersion
   type: http
   seq: 5
 }
@@ -9,8 +9,11 @@ post {
   auth: none
 }
 body:json {
-  {"gate_evaluation_id":"{{gateId}}"}
+  {"paper_promotion_id":"{{paperPromotionId}}","strategy_version_id":"{{versionId}}"}
 }
 script:post-response {
-  if (res.status === 200) bru.setEnvVar("participantId", res.body.id);
+  if (res.status === 200) {
+    bru.setEnvVar("participantId", res.body.id);
+    bru.setEnvVar("paperParticipantId", res.body.id);
+  }
 }

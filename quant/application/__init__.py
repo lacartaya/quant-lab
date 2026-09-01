@@ -91,6 +91,12 @@ from quant.application.paper_arena import (
     PaperProcessingResult,
     ProcessPaperBar,
 )
+from quant.application.paper_promotion import (
+    PaperPromotionEligibility,
+    PaperPromotionEligibilityError,
+    PaperPromotionError,
+    PaperPromotionService,
+)
 from quant.application.register_experiment import RegisterExperiment
 from quant.application.research_memory import (
     CheckPriorArt,
@@ -156,6 +162,10 @@ __all__ = [
     "PaperObservationConflict",
     "PaperOutOfOrderObservation",
     "PaperProcessingResult",
+    "PaperPromotionEligibility",
+    "PaperPromotionEligibilityError",
+    "PaperPromotionError",
+    "PaperPromotionService",
     "ProcessPaperBar",
     "CheckPriorArt",
     "DuplicateHypothesisError",

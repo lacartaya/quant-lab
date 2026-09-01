@@ -34,6 +34,8 @@ from quant.domain import (
     MarketBar,
     PaperParticipant,
     PaperParticipantStatus,
+    PaperPromotion,
+    PaperPromotionStatus,
     PaperSession,
     PaperSessionStatus,
     StrategyVersion,
@@ -126,6 +128,31 @@ class MemoryPaperRepository:
 
 class GetRepository:
     def __init__(self, value) -> None:
+        if isinstance(value, ValidationGateResult):
+            revoked = value.decision is GateDecision.FAIL
+            value = PaperPromotion(
+                value.id,
+                uuid4(),
+                value.strategy_version_id,
+                uuid4(),
+                value.experiment_run_id,
+                value.id,
+                uuid4(),
+                value.policy_id,
+                value.policy_version,
+                value.decision.value,
+                PaperPromotionStatus.REVOKED
+                if revoked
+                else PaperPromotionStatus.APPROVED,
+                "test approval",
+                "test-operator",
+                NOW,
+                NOW,
+                NOW,
+                NOW if revoked else None,
+                "test-operator" if revoked else None,
+                "gate failed fixture" if revoked else None,
+            )
         self.value = value
 
     def get(self, identity: UUID):
@@ -244,6 +271,36 @@ def test_gate_admission_requires_exact_passing_policy() -> None:
     assert admitted.strategy_version_id == version.id
     assert admitted.source_gate_evaluation_id == passing.id
     assert admitted.status is PaperParticipantStatus.ACTIVE
+    with pytest.raises(PaperEligibilityError, match="strategy version"):
+        service = AddPaperParticipant(
+            papers,
+            GetRepository(passing),
+            ExperimentRepository(run),
+            StrategyRepository(version),
+        )
+        service.execute(session.id, passing.id, strategy_version_id=uuid4())
+    with pytest.raises(PaperEligibilityError, match="broker target"):
+        service.execute(session.id, passing.id, broker_target="LIVE")
+
+
+def test_operator_run_wrapped_execution_is_persisted_as_paper_configuration() -> None:
+    papers, version, run, gate, session, _ = paper_fixture()
+    wrapped = replace(
+        run,
+        configuration={
+            "execution": dict(run.configuration),
+            "evidence": {},
+            "fingerprint": "sha256:test",
+        },
+    )
+    participant = AddPaperParticipant(
+        papers,
+        GetRepository(gate),
+        ExperimentRepository(wrapped),
+        StrategyRepository(version),
+    ).execute(session.id, gate.id)
+    assert "engine_version" in participant.execution_configuration
+    assert "execution" not in participant.execution_configuration
 
 
 def test_processing_is_idempotent_and_rejects_conflicts_and_out_of_order() -> None:

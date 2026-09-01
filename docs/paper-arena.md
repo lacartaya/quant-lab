@@ -4,9 +4,16 @@ Paper Arena consumes bars one at a time and simulates trading with fake capital.
 
 ## Sessions and participants
 
-A session identifies a market, instrument, timeframe, immutable feed lineage, evaluation boundary, provider version, and status. Participants share its observations while owning independent portfolios. Each fixes its strategy version, passing admission gate, starting capital, costs, and paper-engine version.
+A session identifies a market, instrument, timeframe, immutable feed lineage,
+evaluation boundary, provider version, and status. Participants share its
+observations while owning independent portfolios. Each fixes its strategy
+version, explicit PaperPromotion, source gate, starting capital, costs, and
+paper-engine version.
 
-Admission requires `PASS` from the exact `HISTORICAL_TO_PAPER` gate evaluation. A newer evaluation never rewrites existing admission lineage.
+Admission requires an explicitly human-approved, non-revoked PaperPromotion
+derived from the exact passing `HISTORICAL_TO_PAPER` gate evaluation. A newer
+evaluation never rewrites existing admission lineage. Approval creates no
+session; starting remains a separate action.
 
 ## Replay and timing
 

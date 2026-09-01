@@ -1,4 +1,4 @@
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -16,7 +16,7 @@ from quant.application.experiments.registry import (
     reconstruct_configurations,
 )
 from quant.backtest import BacktestEngine
-from quant.domain import GateDecision, HistoricalDataset, MarketBar
+from quant.domain import HistoricalDataset, MarketBar, PaperPromotionStatus
 from quant.domain.paper import (
     PaperObservation,
     PaperParticipant,
@@ -29,7 +29,7 @@ from quant.domain.paper import (
 from quant.ports import (
     DatasetRepository,
     ExperimentRepository,
-    GateRepository,
+    PaperPromotionRepository,
     StrategyRepository,
 )
 from quant.ports.live_market_data import LiveMarketDataProvider
@@ -132,13 +132,20 @@ class CreatePaperSession:
 @dataclass(frozen=True, slots=True)
 class AddPaperParticipant:
     papers: PaperRepository
-    gates: GateRepository
+    promotions: PaperPromotionRepository
     experiments: ExperimentRepository
     strategies: StrategyRepository
     id_factory: Callable[[], UUID] = uuid4
     clock: Callable[[], datetime] = lambda: datetime.now(UTC)
 
-    def execute(self, session_id: UUID, gate_evaluation_id: UUID) -> PaperParticipant:
+    def execute(
+        self,
+        session_id: UUID,
+        paper_promotion_id: UUID,
+        *,
+        strategy_version_id: UUID | None = None,
+        broker_target: str | None = None,
+    ) -> PaperParticipant:
         session = _required(
             self.papers.get_session(session_id), "paper session", session_id
         )
@@ -146,38 +153,50 @@ class AddPaperParticipant:
             raise PaperArenaError(
                 "cannot add a participant to a terminal paper session"
             )
-        gate = _required(
-            self.gates.get(gate_evaluation_id), "gate evaluation", gate_evaluation_id
+        if broker_target is not None:
+            raise PaperEligibilityError("Paper Arena does not accept a broker target")
+        promotion = _required(
+            self.promotions.get(paper_promotion_id),
+            "paper promotion",
+            paper_promotion_id,
         )
+        if promotion.status is not PaperPromotionStatus.APPROVED:
+            raise PaperEligibilityError(
+                "paper admission requires an approved, non-revoked Paper promotion"
+            )
         if (
-            gate.decision is not GateDecision.PASS
-            or gate.policy_id != HISTORICAL_TO_PAPER_POLICY
+            strategy_version_id is not None
+            and strategy_version_id != promotion.strategy_version_id
         ):
             raise PaperEligibilityError(
-                "paper admission requires a passing HISTORICAL_TO_PAPER gate"
+                "strategy version does not match promoted lineage"
             )
         version = _required(
-            self.strategies.get_version(gate.strategy_version_id),
+            self.strategies.get_version(promotion.strategy_version_id),
             "strategy version",
-            gate.strategy_version_id,
+            promotion.strategy_version_id,
         )
         build_strategy(version)
         run = _required(
-            self.experiments.get_run(gate.experiment_run_id),
+            self.experiments.get_run(promotion.experiment_run_id),
             "experiment run",
-            gate.experiment_run_id,
+            promotion.experiment_run_id,
         )
-        backtest, _ = reconstruct_configurations(run.configuration)
+        execution_configuration: Mapping[str, object] = run.configuration
+        nested_execution = run.configuration.get("execution")
+        if isinstance(nested_execution, Mapping):
+            execution_configuration = nested_execution
+        backtest, _ = reconstruct_configurations(execution_configuration)
         participant = PaperParticipant(
             id=self.id_factory(),
             session_id=session.id,
             strategy_version_id=version.id,
-            source_gate_evaluation_id=gate.id,
+            source_gate_evaluation_id=promotion.validation_gate_id,
             status=PaperParticipantStatus.ACTIVE
             if session.status is PaperSessionStatus.RUNNING
             else PaperParticipantStatus.PENDING,
             initial_capital=backtest.initial_cash,
-            execution_configuration=run.configuration,
+            execution_configuration=execution_configuration,
             paper_engine_version=PAPER_ENGINE_VERSION,
             started_at=self.clock()
             if session.status is PaperSessionStatus.RUNNING
@@ -187,6 +206,7 @@ class AddPaperParticipant:
             last_successful_at=None,
             last_error=None,
             created_at=self.clock(),
+            paper_promotion_id=promotion.id,
         )
         self.papers.add_participant(participant)
         return participant
@@ -371,6 +391,7 @@ class ProcessPaperBar:
             "paper_participant_id": str(participant.id),
             "strategy_version_id": str(version.id),
             "source_gate_evaluation_id": str(participant.source_gate_evaluation_id),
+            "paper_promotion_id": str(participant.paper_promotion_id),
             "provider": {
                 "name": session.provider_name,
                 "version": session.provider_version,

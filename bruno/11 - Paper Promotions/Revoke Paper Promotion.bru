@@ -1,0 +1,13 @@
+meta {
+  name: Revoke Paper Promotion
+  type: http
+  seq: 4
+}
+post {
+  url: {{baseUrl}}/api/v1/paper-promotions/{{paperPromotionId}}/revoke
+  body: json
+  auth: none
+}
+body:json {
+  {"confirm":true,"reason":"Manual operator revocation","approval_actor":"local-operator"}
+}

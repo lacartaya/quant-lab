@@ -15,6 +15,13 @@ Run the committed requests in this order:
 11. Run `09 - Adversarial/Get Report`.
 12. Run `10 - Validation Gates/Run Gate` and retain PASS or FAIL honestly.
 13. Inspect the visualization and Dataset Quality endpoints.
+14. Run `11 - Paper Promotions/Approve ExperimentRun for Paper`; approval is an
+    explicit operator decision and captures `paperPromotionId`.
+15. Run `12 - Paper Arena/Create Replay Session`, `Add promoted
+    StrategyVersion`, `Start Session`, `Advance Replay`, and `Get Participant`.
+
+This workflow uses Quant Lab internal simulated fills. It does not submit an
+Alpaca Paper broker order and has no Live-money action.
 
 Each request captures its immutable evidence ID for the next stage. Review every
 configuration before execution; example values are not approved thresholds or

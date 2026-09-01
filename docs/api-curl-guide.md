@@ -9,6 +9,7 @@ export EXPERIMENT_ID=00000000-0000-0000-0000-000000000001
 export RUN_ID=00000000-0000-0000-0000-000000000002
 export VALIDATION_ID=00000000-0000-0000-0000-000000000003
 export GATE_ID=00000000-0000-0000-0000-000000000004
+export PAPER_PROMOTION_ID=00000000-0000-0000-0000-000000000010
 export SNAPSHOT_ID=00000000-0000-0000-0000-000000000005
 export HYPOTHESIS_ID=00000000-0000-0000-0000-000000000008
 export VERSION_ID=00000000-0000-0000-0000-000000000009
@@ -245,7 +246,27 @@ curl "$QUANT_LAB_URL/api/v1/operator-summary"
 # {"active_experiments":0,"failed_gates":0,"high_findings":0,...}
 ```
 
-## 18. Internal Paper Arena
+## 18. Paper Promotion
+
+Eligibility is read-only. Approval requires an explicit acknowledgement and
+persists authorization lineage only; it creates no session and submits no order.
+
+```bash
+curl "$QUANT_LAB_URL/api/v1/experiment-runs/$RUN_ID/paper-promotion-eligibility?validation_gate_id=$GATE_ID"
+curl -X POST "$QUANT_LAB_URL/api/v1/experiment-runs/$RUN_ID/paper-promotions" \
+  -H 'Content-Type: application/json' \
+  --data "{\"confirm\":true,\"validation_gate_id\":\"$GATE_ID\",\"reason\":\"Approved for forward-only Paper observation\",\"approval_actor\":\"local-operator\"}"
+curl "$QUANT_LAB_URL/api/v1/paper-promotions"
+curl "$QUANT_LAB_URL/api/v1/paper-promotions/$PAPER_PROMOTION_ID"
+curl -X POST "$QUANT_LAB_URL/api/v1/paper-promotions/$PAPER_PROMOTION_ID/revoke" \
+  -H 'Content-Type: application/json' \
+  --data '{"confirm":true,"reason":"Manual operator revocation","approval_actor":"local-operator"}'
+```
+
+An identical approved lineage returns the existing promotion. A revoked lineage
+requires a new gate decision. Revocation preserves historical and Paper evidence.
+
+## 19. Internal Paper Arena
 
 All money is fake. A session uses `feed_mode` `replay` or `alpaca_iex`; execution
 mode remains `internal_paper`.
@@ -258,8 +279,8 @@ curl -X POST "$QUANT_LAB_URL/api/v1/paper/sessions" -H 'Content-Type: applicatio
   --data "{\"dataset_snapshot_id\":\"$SNAPSHOT_ID\",\"evaluation_start\":\"2026-08-25T00:00:00Z\",\"feed_mode\":\"replay\"}"
 # Detail
 curl "$QUANT_LAB_URL/api/v1/paper/sessions/$SESSION_ID"
-# Add gate-eligible participant
-curl -X POST "$QUANT_LAB_URL/api/v1/paper/sessions/$SESSION_ID/participants" -H 'Content-Type: application/json' --data "{\"gate_evaluation_id\":\"$GATE_ID\"}"
+# Add the exact promoted StrategyVersion
+curl -X POST "$QUANT_LAB_URL/api/v1/paper/sessions/$SESSION_ID/participants" -H 'Content-Type: application/json' --data "{\"paper_promotion_id\":\"$PAPER_PROMOTION_ID\",\"strategy_version_id\":\"$VERSION_ID\"}"
 # Start / pause
 curl -X POST "$QUANT_LAB_URL/api/v1/paper/sessions/$SESSION_ID/start"
 curl -X POST "$QUANT_LAB_URL/api/v1/paper/sessions/$SESSION_ID/pause"
@@ -286,7 +307,7 @@ curl "$QUANT_LAB_URL/api/v1/paper/participants/$PARTICIPANT_ID/metrics"
 These return participant state or immutable internal simulated artifacts. They do
 not contact Alpaca Paper brokerage.
 
-## 19. Alpaca Paper Account
+## 20. Alpaca Paper Account
 
 ```bash
 curl "$QUANT_LAB_URL/api/v1/brokers/alpaca/paper/connectivity"
@@ -297,7 +318,7 @@ curl "$QUANT_LAB_URL/api/v1/brokers/alpaca/paper/fills"
 # [{"activity_id":"...","order_id":"...","price":...,"simulated":true}]
 ```
 
-## 20. Alpaca Paper Orders
+## 21. Alpaca Paper Orders
 
 Submit requires a stable client ID; market/day is the only supported order type.
 POST writes are not blindly retried.
@@ -316,7 +337,7 @@ curl "$QUANT_LAB_URL/api/v1/brokers/alpaca/paper/orders/$ORDER_ID"
 Errors include market closed/rejection or insufficient simulated buying power as
 safe upstream messages. Always reconcile instead of assuming immediate fill.
 
-## 21. Alpaca Paper Positions
+## 22. Alpaca Paper Positions
 
 ```bash
 curl "$QUANT_LAB_URL/api/v1/brokers/alpaca/paper/positions"
@@ -329,7 +350,7 @@ curl -X DELETE "$QUANT_LAB_URL/api/v1/brokers/alpaca/paper/positions/SPY?confirm
 
 Omitting `confirm=true` returns `409`; an absent position returns `404`.
 
-## 22. Alpaca live/free market-data workflow
+## 23. Alpaca live/free market-data workflow
 
 The public forward operation is the Paper Arena poll shown in section 18. It
 fetches the latest free IEX bar server-side and feeds only the named

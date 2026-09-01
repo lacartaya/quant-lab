@@ -261,6 +261,53 @@ class GateEvaluationModel(Base):
     fingerprint: Mapped[str] = mapped_column(String(100))
 
 
+class PaperPromotionModel(Base):
+    __tablename__ = "paper_promotions"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('approved', 'revoked')", name="ck_paper_promotions_status"
+        ),
+        UniqueConstraint(
+            "experiment_run_id",
+            "strategy_version_id",
+            "validation_gate_id",
+            name="uq_paper_promotion_lineage",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(PostgreSQLUUID(as_uuid=True), primary_key=True)
+    hypothesis_id: Mapped[UUID] = mapped_column(
+        PostgreSQLUUID(as_uuid=True), ForeignKey("hypotheses.id"), index=True
+    )
+    strategy_version_id: Mapped[UUID] = mapped_column(
+        PostgreSQLUUID(as_uuid=True), ForeignKey("strategy_versions.id"), index=True
+    )
+    experiment_id: Mapped[UUID] = mapped_column(
+        PostgreSQLUUID(as_uuid=True), ForeignKey("experiments.id"), index=True
+    )
+    experiment_run_id: Mapped[UUID] = mapped_column(
+        PostgreSQLUUID(as_uuid=True), ForeignKey("experiment_runs.id"), index=True
+    )
+    validation_gate_id: Mapped[UUID] = mapped_column(
+        PostgreSQLUUID(as_uuid=True), ForeignKey("gate_evaluations.id"), index=True
+    )
+    dataset_snapshot_id: Mapped[UUID] = mapped_column(
+        PostgreSQLUUID(as_uuid=True), ForeignKey("dataset_snapshots.id"), index=True
+    )
+    gate_policy_id: Mapped[str] = mapped_column(String(100))
+    gate_policy_version: Mapped[int] = mapped_column(Integer)
+    gate_decision: Mapped[str] = mapped_column(String(16))
+    status: Mapped[str] = mapped_column(String(16), index=True)
+    reason: Mapped[str] = mapped_column(Text)
+    approval_actor: Mapped[str] = mapped_column(String(100))
+    requested_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    approved_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    revoked_by: Mapped[str | None] = mapped_column(String(100))
+    revocation_reason: Mapped[str | None] = mapped_column(Text)
+
+
 class PaperSessionModel(Base):
     __tablename__ = "paper_sessions"
     __table_args__ = (
@@ -309,6 +356,9 @@ class PaperParticipantModel(Base):
     )
     source_gate_evaluation_id: Mapped[UUID] = mapped_column(
         PostgreSQLUUID(as_uuid=True), ForeignKey("gate_evaluations.id"), index=True
+    )
+    paper_promotion_id: Mapped[UUID | None] = mapped_column(
+        PostgreSQLUUID(as_uuid=True), ForeignKey("paper_promotions.id"), index=True
     )
     status: Mapped[str] = mapped_column(String(16), index=True)
     initial_capital: Mapped[str] = mapped_column(String(100))
