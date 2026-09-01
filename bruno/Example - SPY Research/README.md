@@ -11,9 +11,11 @@ Run the committed requests in this order:
 7. `06 - Experiments/Create Experiment` (captures `experimentId`).
 8. `06 - Experiments/Run Experiment` (captures `runId` and BACKTEST `validationId`).
 9. `07 - Experiment Runs/Get Run` and `08 - Validations/List All Validations`.
-10. Inspect the automatically persisted BACKTEST validation.
+10. Run the explicit POST requests in `08 - Validations` in sequence.
+11. Run `09 - Adversarial/Get Report`.
+12. Run `10 - Validation Gates/Run Gate` and retain PASS or FAIL honestly.
+13. Inspect the visualization and Dataset Quality endpoints.
 
-The HTTP API does not yet expose the OOS, walk-forward, sensitivity, stress,
-Monte Carlo, adversarial-generation, or gate-evaluation application services.
-Their existing evidence remains readable through folders 08–10. This sequence
-does not invent hidden validation or gate configuration.
+Each request captures its immutable evidence ID for the next stage. Review every
+configuration before execution; example values are not approved thresholds or
+optimized strategy parameters.

@@ -22,3 +22,4 @@ data/snapshots/
 .idea/
 .vscode/
 .DS_Store
+node_modules/

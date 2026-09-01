@@ -1,3 +1,13 @@
-meta { name: Get simulated Alpaca PAPER account type: http seq: 2 }
-get { url: {{baseUrl}}/api/v1/brokers/alpaca/paper/account body: none auth: none }
-tests { test("paper account", function () { expect(res.status).to.equal(200); expect(res.body.simulated).to.equal(true); }); }
+meta {
+  name: Get simulated Alpaca PAPER account
+  type: http
+  seq: 2
+}
+get {
+  url: {{baseUrl}}/api/v1/brokers/alpaca/paper/account
+  body: none
+  auth: none
+}
+tests {
+  test("paper account", function () { expect(res.status).to.equal(200); expect(res.body.simulated).to.equal(true); });
+}

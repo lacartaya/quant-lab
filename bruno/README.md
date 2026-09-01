@@ -16,10 +16,10 @@ capture their own returned IDs.
 
 Run Health, import/list SPY Daily, check prior art, create the hypothesis, create
 the immutable MA 50/200 StrategyVersion, create the experiment, and run it. Each
-write captures the ID required by the next request. The run creates and captures
-BACKTEST evidence. Later validation-generation services are not yet public HTTP
-writes; their persisted evidence remains inspectable in folders 08–10. If an
-immutable PASS gate exists, the Paper Arena workflow can admit it.
+write captures the ID required by the next request. The run captures BACKTEST
+evidence. Folders 08–10 then execute and capture OOS, walk-forward, sensitivity,
+stress, Monte Carlo, adversarial, and gate evidence. A gate failure is retained,
+not tuned away.
 
 ## Example - Alpaca Paper Trading
 

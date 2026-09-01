@@ -35,12 +35,19 @@ from quant.application import (
     ComparePaperParticipants,
     CreateDatasetSnapshot,
     CreatePaperSession,
+    EvaluateValidationGate,
     ImportHistoricalDataset,
     LoadDatasetSnapshot,
     OperatorQueries,
     OperatorResearchWorkflow,
     PaperLifecycle,
     ProcessPaperBar,
+    RunAdversarialValidation,
+    RunMonteCarloValidation,
+    RunOutOfSampleValidation,
+    RunParameterSensitivityValidation,
+    RunStressValidation,
+    RunWalkForwardValidation,
 )
 from quant.domain import HistoricalDataset
 from quant.ports import DatasetRepository
@@ -62,13 +69,17 @@ def get_session() -> Iterator[Session]:
 def get_operator_queries(
     session: Annotated[Session, Depends(get_session)],
 ) -> OperatorQueries:
+    datasets = SQLAlchemyDatasetRepository(session)
     return OperatorQueries(
         hypotheses=SQLAlchemyHypothesisRepository(session),
         strategies=SQLAlchemyStrategyRepository(session),
-        datasets=SQLAlchemyDatasetRepository(session),
+        datasets=datasets,
         experiments=SQLAlchemyExperimentRepository(session),
         gates=SQLAlchemyGateRepository(session),
         knowledge=SQLAlchemyKnowledgeRepository(session),
+        dataset_loader=LoadDatasetSnapshot(
+            LocalParquetDatasetStorage(dataset_storage_path()), datasets
+        ),
     )
 
 
@@ -112,8 +123,50 @@ def get_research_workflow(
     )
 
 
-ResearchDependency = Annotated[
-    OperatorResearchWorkflow, Depends(get_research_workflow)
+ResearchDependency = Annotated[OperatorResearchWorkflow, Depends(get_research_workflow)]
+
+
+@dataclass(frozen=True, slots=True)
+class ValidationServices:
+    out_of_sample: RunOutOfSampleValidation
+    walk_forward: RunWalkForwardValidation
+    sensitivity: RunParameterSensitivityValidation
+    stress: RunStressValidation
+    monte_carlo: RunMonteCarloValidation
+    adversarial: RunAdversarialValidation
+    gate: EvaluateValidationGate
+    experiments: SQLAlchemyExperimentRepository
+
+
+def get_validation_services(
+    session: Annotated[Session, Depends(get_session)],
+) -> ValidationServices:
+    datasets = SQLAlchemyDatasetRepository(session)
+    experiments = SQLAlchemyExperimentRepository(session)
+    strategies = SQLAlchemyStrategyRepository(session)
+    loader = LoadDatasetSnapshot(
+        LocalParquetDatasetStorage(dataset_storage_path()), datasets
+    )
+    return ValidationServices(
+        RunOutOfSampleValidation(experiments, strategies, datasets, loader),
+        RunWalkForwardValidation(experiments, strategies, datasets, loader),
+        RunParameterSensitivityValidation(experiments, strategies, datasets, loader),
+        RunStressValidation(experiments, strategies, datasets, loader),
+        RunMonteCarloValidation(experiments, datasets, loader),
+        RunAdversarialValidation(experiments, datasets, loader),
+        EvaluateValidationGate(
+            experiments,
+            strategies,
+            datasets,
+            SQLAlchemyGateRepository(session),
+            loader,
+        ),
+        experiments,
+    )
+
+
+ValidationDependency = Annotated[
+    ValidationServices, Depends(get_validation_services)
 ]
 
 
@@ -166,6 +219,7 @@ class AlpacaServices:
     client: AlpacaHTTPClient
     broker: AlpacaPaperBrokerAdapter
     historical_import: ImportHistoricalDataset
+    historical_import_for_feed: Callable[[str], ImportHistoricalDataset] | None = None
 
 
 def get_alpaca_services(
@@ -177,21 +231,21 @@ def get_alpaca_services(
     storage = LocalParquetDatasetStorage(dataset_storage_path())
     loader = LoadDatasetSnapshot(storage, datasets)
     try:
+        def importer(feed: str) -> ImportHistoricalDataset:
+            return ImportHistoricalDataset(
+                CreateDatasetSnapshot(
+                    AlpacaHistoricalMarketDataProvider(client, feed), storage, datasets
+                ),
+                loader,
+            )
+
         yield AlpacaServices(
             client=client,
             broker=AlpacaPaperBrokerAdapter(
                 client, SQLAlchemyAlpacaPaperOrderRepository(session).save
             ),
-            historical_import=ImportHistoricalDataset(
-                CreateDatasetSnapshot(
-                    AlpacaHistoricalMarketDataProvider(
-                        client, configuration.market_data_feed
-                    ),
-                    storage,
-                    datasets,
-                ),
-                loader,
-            ),
+            historical_import=importer(configuration.market_data_feed),
+            historical_import_for_feed=importer,
         )
     finally:
         client.client.close()

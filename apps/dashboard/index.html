@@ -56,12 +56,13 @@
         <pre id="research-result" class="result hidden"></pre>
       </div>
       <div id="market-data" class="panel">
-        <div class="section-heading"><h2>Market Data / Datasets</h2><span class="badge">ALPACA IEX · DAILY</span></div>
+        <div class="section-heading"><h2>Market Data / Datasets</h2><span class="badge">ALPACA · EXPLICIT FEED</span></div>
         <div id="datasets" class="empty">Loading dataset snapshots…</div>
         <h3>Import Alpaca historical data</h3>
         <form id="dataset-import-form" class="prior-form">
           <label>Symbol<input name="instrument" required value="SPY"></label>
           <label>Timeframe<select name="timeframe"><option value="1Day">1 Day</option><option value="1Min">1 Minute (forward warm-up)</option></select></label>
+          <label>Feed<select name="feed"><option value="sip">SIP consolidated (recommended for research)</option><option value="iex">IEX single exchange</option></select></label>
           <label>Start (UTC)<input name="start" type="datetime-local" required value="2016-01-01T00:00"></label>
           <label>End (UTC)<input name="end" type="datetime-local" required></label>
           <button type="submit">Import immutable snapshot</button>
@@ -110,6 +111,7 @@
     <section id="experiment-detail" class="hidden"></section>
   </main>
   <footer>Local/internal operator interface · no trading controls · no metric editing</footer>
+  <script src="/dashboard/vendor/lightweight-charts.standalone.production.js"></script>
   <script src="/dashboard/app.js" defer></script>
 </body>
 </html>

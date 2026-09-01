@@ -1,3 +1,13 @@
-meta { name: Close SPY PAPER position type: http seq: 8 }
-delete { url: {{baseUrl}}/api/v1/brokers/alpaca/paper/positions/{{symbol}}?confirm=true body: none auth: none }
-tests { test("paper close submitted", function () { expect(res.status).to.equal(200); expect(res.body.simulated).to.equal(true); }); }
+meta {
+  name: Close SPY PAPER position
+  type: http
+  seq: 8
+}
+delete {
+  url: {{baseUrl}}/api/v1/brokers/alpaca/paper/positions/{{symbol}}?confirm=true
+  body: none
+  auth: none
+}
+tests {
+  test("paper close submitted", function () { expect(res.status).to.equal(200); expect(res.body.simulated).to.equal(true); });
+}

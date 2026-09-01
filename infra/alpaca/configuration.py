@@ -30,8 +30,8 @@ class AlpacaPaperConfiguration:
         _require_exact_origin(
             self.market_data_base_url, ALPACA_DATA_ORIGIN, "market data"
         )
-        if self.market_data_feed.lower() != "iex":
-            raise AlpacaConfigurationError("the supported Alpaca Basic feed is IEX")
+        if self.market_data_feed.lower() not in {"iex", "sip"}:
+            raise AlpacaConfigurationError("Alpaca market-data feed must be IEX or SIP")
         if self.timeout_seconds <= 0:
             raise AlpacaConfigurationError("Alpaca timeout must be positive")
         if self.historical_max_retries < 0 or self.historical_max_retries > 5:

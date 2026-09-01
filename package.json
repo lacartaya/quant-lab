@@ -1,0 +1,11 @@
+{
+  "name": "quant-lab-dashboard",
+  "private": true,
+  "scripts": {
+    "vendor:charts": "cp node_modules/lightweight-charts/dist/lightweight-charts.standalone.production.js apps/dashboard/vendor/lightweight-charts.standalone.production.js",
+    "check:js": "node --check apps/dashboard/app.js"
+  },
+  "dependencies": {
+    "lightweight-charts": "5.0.9"
+  }
+}

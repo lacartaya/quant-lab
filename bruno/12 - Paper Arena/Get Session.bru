@@ -1,2 +1,10 @@
-meta { name: Get Paper Arena session type: http seq: 4 }
-get { url: {{baseUrl}}/api/v1/paper/sessions/{{sessionId}} body: none auth: none }
+meta {
+  name: Get Paper Arena session
+  type: http
+  seq: 4
+}
+get {
+  url: {{baseUrl}}/api/v1/paper/sessions/{{sessionId}}
+  body: none
+  auth: none
+}

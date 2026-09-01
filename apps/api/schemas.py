@@ -35,6 +35,58 @@ class DatasetSnapshotListResponse(BaseModel):
     page: PageMetadata
 
 
+class DatasetQualityResponse(BaseModel):
+    snapshot_id: UUID
+    requested_start_at: datetime
+    requested_end_at: datetime
+    actual_start_at: datetime
+    actual_end_at: datetime
+    total_bars: int
+    duplicate_timestamps: int
+    non_monotonic_timestamps: int
+    ordering_valid: bool
+    ordering_failure_examples: list[dict[str, Any]]
+    ohlc_validity_failures: int
+    missing_ohlcv_values: int
+    ohlcv_integrity_valid: bool
+    ohlcv_failure_examples: list[dict[str, Any]]
+    bars_by_calendar_year: dict[int, int]
+    exchange_calendar_verified: bool
+    completeness_note: str
+    has_structural_errors: bool
+
+
+class BacktestVisualizationResponse(BaseModel):
+    run_id: UUID
+    experiment_id: UUID
+    strategy_version_id: UUID
+    dataset_snapshot_id: UUID
+    result_fingerprint: str
+    instrument: str
+    timeframe: str
+    strategy: str
+    parameters: dict[str, Any]
+    requested_start_at: datetime
+    requested_end_at: datetime
+    actual_start_at: datetime
+    actual_end_at: datetime
+    bar_count: int
+    returned_bar_count: int
+    maximum_bar_count: int
+    execution: dict[str, Any]
+    bars: list[dict[str, Any]]
+    indicators: list[dict[str, Any]]
+    indicator_labels: dict[str, str]
+    signals: list[dict[str, Any]]
+    orders: list[dict[str, Any]]
+    fills: list[dict[str, Any]]
+    trades: list[dict[str, Any]]
+    positions: list[dict[str, Any]]
+    equity: list[dict[str, Any]]
+    benchmark_equity: list[dict[str, Any]]
+    quality: dict[str, Any]
+
+
 class HistoricalImportRequest(BaseModel):
     provider: Literal["ALPACA"] = "ALPACA"
     instrument: str
@@ -42,7 +94,7 @@ class HistoricalImportRequest(BaseModel):
     timeframe: Literal["1Day", "1Min"] = "1Day"
     start: datetime
     end: datetime
-    feed: Literal["iex"] = "iex"
+    feed: Literal["iex", "sip"] = "iex"
     adjustment_policy: Literal["raw", "adjusted", "RAW", "ADJUSTED"] = "raw"
 
 
@@ -97,6 +149,87 @@ class ValidationResponse(BaseModel):
     evidence: dict[str, Any]
     created_at: datetime
     completed_at: datetime | None
+
+
+class OutOfSampleRequest(BaseModel):
+    training_start: datetime
+    training_end: datetime
+    test_start: datetime
+    test_end: datetime
+
+
+class WalkForwardRequest(BaseModel):
+    mode: Literal["expanding", "rolling"]
+    training_window: int = Field(gt=0)
+    test_window: int = Field(gt=0)
+    step: int = Field(gt=0)
+
+
+class ParameterSensitivityRequest(BaseModel):
+    parameters: dict[str, list[int]]
+    maximum_combinations: int = Field(gt=0)
+
+
+class StressScenarioRequest(BaseModel):
+    id: str = Field(min_length=1)
+    name: str = Field(min_length=1)
+    stress_type: Literal[
+        "fee_multiplier",
+        "slippage_multiplier",
+        "execution_delay",
+        "adverse_price",
+        "parameter_perturbation",
+    ]
+    configuration: dict[str, Any]
+
+
+class StressRequest(BaseModel):
+    scenarios: list[StressScenarioRequest] = Field(min_length=1)
+
+
+class MonteCarloRequest(BaseModel):
+    simulation_count: int = Field(gt=0, le=100_000)
+    random_seed: int
+    confidence_percentiles: list[Decimal] = Field(min_length=1)
+    sampling_method: Literal["trade_bootstrap"]
+    drawdown_threshold: Decimal | None = None
+    ruin_equity_fraction: Decimal | None = None
+
+
+class AdversarialRequest(BaseModel):
+    max_oos_sharpe_drop: float
+    max_oos_return_drop: float
+    max_oos_drawdown_worsening: float
+    min_profitable_fold_ratio: float
+    max_fold_return_dispersion: float
+    max_fold_sharpe_dispersion: float
+    max_neighbor_sharpe_delta: float
+    min_profitable_parameter_ratio: float
+    max_parameter_sharpe_dispersion: float
+    max_stress_return_drop: float
+    max_stress_drawdown_worsening: float
+    max_bootstrap_loss_frequency: float
+    max_adverse_bootstrap_drawdown: float
+    max_bootstrap_losing_streak: int
+    max_historical_return_percentile: float
+    min_trade_count_for_interpretation: int
+    max_top_trade_profit_share: float
+    max_top_three_profit_share: float
+
+
+class GateRuleRequest(BaseModel):
+    code: str
+    threshold: float | int | str
+
+
+class GateEvaluationRequest(BaseModel):
+    policy_id: str = Field(min_length=1)
+    policy_version: int = Field(gt=0)
+    policy_name: str = Field(min_length=1)
+    required_validations: list[str]
+    require_adversarial_report: bool
+    rules: list[GateRuleRequest]
+    evidence_ids: dict[str, UUID]
 
 
 class HypothesisResponse(BaseModel):

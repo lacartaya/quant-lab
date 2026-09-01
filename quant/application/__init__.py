@@ -1,5 +1,12 @@
 """Minimal application use cases coordinating domain ports."""
 
+from quant.application.backtest_visualization import (
+    MAX_VISUALIZATION_BARS,
+    BacktestVisualizationService,
+    BacktestVisualizationUnavailable,
+    DatasetQuality,
+    dataset_quality,
+)
 from quant.application.dataset_snapshots import (
     CreateDatasetSnapshot,
     DatasetIntegrityError,
@@ -8,6 +15,7 @@ from quant.application.dataset_snapshots import (
     canonical_bars_checksum,
 )
 from quant.application.experiments import (
+    OUT_OF_SAMPLE_VERSION,
     PARAMETER_SENSITIVITY_VERSION,
     STRESS_VALIDATION_VERSION,
     WALK_FORWARD_VERSION,
@@ -20,6 +28,8 @@ from quant.application.experiments import (
     MonteCarloLineageError,
     MonteCarloReproductionResult,
     MonteCarloValidationResult,
+    OutOfSampleLineageError,
+    OutOfSampleValidationResult,
     ParameterSensitivityLineageError,
     ParameterSensitivityReproductionResult,
     ParameterSensitivityValidationResult,
@@ -35,6 +45,7 @@ from quant.application.experiments import (
     RunAdversarialValidation,
     RunExperiment,
     RunMonteCarloValidation,
+    RunOutOfSampleValidation,
     RunParameterSensitivityValidation,
     RunStressValidation,
     RunWalkForwardValidation,
@@ -104,6 +115,9 @@ __all__ = [
     "MonteCarloLineageError",
     "MonteCarloReproductionResult",
     "MonteCarloValidationResult",
+    "OUT_OF_SAMPLE_VERSION",
+    "OutOfSampleLineageError",
+    "OutOfSampleValidationResult",
     "PARAMETER_SENSITIVITY_VERSION",
     "ParameterSensitivityLineageError",
     "ParameterSensitivityReproductionResult",
@@ -153,6 +167,7 @@ __all__ = [
     "RunExperiment",
     "RunAdversarialValidation",
     "RunMonteCarloValidation",
+    "RunOutOfSampleValidation",
     "RunParameterSensitivityValidation",
     "RunStressValidation",
     "RunWalkForwardValidation",
@@ -168,4 +183,9 @@ __all__ = [
     "ValidationGateIntegrityError",
     "WALK_FORWARD_VERSION",
     "canonical_bars_checksum",
+    "MAX_VISUALIZATION_BARS",
+    "BacktestVisualizationService",
+    "BacktestVisualizationUnavailable",
+    "DatasetQuality",
+    "dataset_quality",
 ]

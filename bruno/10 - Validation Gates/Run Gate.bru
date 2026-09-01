@@ -1,0 +1,16 @@
+meta {
+  name: Evaluate explicit validation gate
+  type: http
+  seq: 1
+}
+post {
+  url: {{baseUrl}}/api/v1/experiment-runs/{{runId}}/gate-evaluations
+  body: json
+  auth: none
+}
+body:json {
+  {"policy_id":"HISTORICAL_TO_PAPER","policy_version":1,"policy_name":"Explicit historical research gate","required_validations":["backtest","out_of_sample","walk_forward","parameter_sensitivity","stress","monte_carlo"],"require_adversarial_report":true,"rules":[],"evidence_ids":{"backtest":"{{validationId}}","out_of_sample":"{{oosValidationId}}","walk_forward":"{{walkForwardValidationId}}","parameter_sensitivity":"{{sensitivityValidationId}}","stress":"{{stressValidationId}}","monte_carlo":"{{monteCarloValidationId}}","adversarial_review":"{{adversarialValidationId}}"}}
+}
+script:post-response {
+  if (res.status === 201) bru.setEnvVar("gateId", res.body.id);
+}

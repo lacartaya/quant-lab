@@ -1,0 +1,12 @@
+{
+  "name": "SPY Daily Moving Average Trend",
+  "description": "Long-flat moving average trend strategy for SPY using 50-day and 200-day moving averages.",
+  "strategy_family": "moving_average_trend",
+  "version": "1.0.0",
+  "git_commit": "local",
+  "algorithm_key": "moving_average_trend",
+  "parameters": {
+    "short_window": 50,
+    "long_window": 200
+  }
+}

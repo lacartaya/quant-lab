@@ -1,2 +1,16 @@
-meta { name: Out-of-sample evidence type: http seq: 3 }
-get { url: {{baseUrl}}/api/v1/experiment-runs/{{runId}}/validations?validation_type=out_of_sample body: none auth: none }
+meta {
+  name: Run OOS validation
+  type: http
+  seq: 3
+}
+post {
+  url: {{baseUrl}}/api/v1/experiment-runs/{{runId}}/validations/out-of-sample
+  body: json
+  auth: none
+}
+body:json {
+  {"training_start":"2020-07-24T00:00:00Z","training_end":"2023-12-31T23:59:59Z","test_start":"2024-01-01T00:00:00Z","test_end":"2026-08-26T23:59:59Z"}
+}
+script:post-response {
+  if (res.status === 201) bru.setEnvVar("oosValidationId", res.body.id);
+}

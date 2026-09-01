@@ -155,11 +155,9 @@ curl -X POST "$QUANT_LAB_URL/api/v1/experiments/$EXPERIMENT_ID/runs" \
 # {"experiment_run_id":"...","status":"completed","result_fingerprint":"...","validation_ids":["..."]}
 ```
 
-The current public write workflow stops after deterministic BACKTEST execution.
-OOS, walk-forward, sensitivity, stress, Monte Carlo, adversarial generation, and
-gate evaluation retain their existing application services and read endpoints;
-they were not exposed because each requires a substantial explicit configuration
-contract and no reproducibility-safe operator orchestration exists yet.
+The public workflow continues through explicit, reproducibility-safe validation
+POSTs. No endpoint supplies hidden research defaults or interprets successful
+execution as policy approval.
 
 ## 8. Experiment Runs
 
@@ -171,6 +169,20 @@ curl "$QUANT_LAB_URL/api/v1/experiment-runs/$RUN_ID"
 ```
 
 ## 9–14. Backtest / Metrics, OOS, Walk-Forward, Parameter Sensitivity, Stress, Monte Carlo
+
+Execute each stage with explicit configuration:
+
+```bash
+curl -X POST "$QUANT_LAB_URL/api/v1/experiment-runs/$RUN_ID/validations/out-of-sample" -H 'Content-Type: application/json' --data '{"training_start":"2020-07-24T00:00:00Z","training_end":"2023-12-31T23:59:59Z","test_start":"2024-01-01T00:00:00Z","test_end":"2026-08-26T23:59:59Z"}'
+curl -X POST "$QUANT_LAB_URL/api/v1/experiment-runs/$RUN_ID/validations/walk-forward" -H 'Content-Type: application/json' --data '{"mode":"expanding","training_window":504,"test_window":126,"step":126}'
+curl -X POST "$QUANT_LAB_URL/api/v1/experiment-runs/$RUN_ID/validations/parameter-sensitivity" -H 'Content-Type: application/json' --data '{"parameters":{"short_window":[40,50,60],"long_window":[180,200,220]},"maximum_combinations":9}'
+curl -X POST "$QUANT_LAB_URL/api/v1/experiment-runs/$RUN_ID/validations/stress" -H 'Content-Type: application/json' --data '{"scenarios":[{"id":"fees-2x","name":"Double fees","stress_type":"fee_multiplier","configuration":{"multiplier":"2"}}]}'
+curl -X POST "$QUANT_LAB_URL/api/v1/experiment-runs/$RUN_ID/validations/monte-carlo" -H 'Content-Type: application/json' --data '{"simulation_count":1000,"random_seed":20260831,"confidence_percentiles":[0.05,0.5,0.95],"sampling_method":"trade_bootstrap","drawdown_threshold":-0.25,"ruin_equity_fraction":0.5}'
+```
+
+OOS rejects touching or overlapping train/test ranges. Walk-forward rejects
+overlapping test folds. Sensitivity stores every valid configured combination;
+Monte Carlo retains the caller's seed.
 
 All are distinct persisted validations. **List run validations** with optional
 `validation_type` (`backtest`, `out_of_sample`, `walk_forward`,
@@ -324,3 +336,14 @@ fetches the latest free IEX bar server-side and feeds only the named
 `alpaca_iex` session. It creates Quant Lab internal simulated evidence, not an
 Alpaca broker order. There is intentionally no public endpoint exposing keys or
 an unrestricted vendor proxy.
+## Backtest visualization and dataset quality
+
+```bash
+curl "$QUANT_LAB_URL/api/v1/experiment-runs/$RUN_ID/backtest-visualization"
+curl "$QUANT_LAB_URL/api/v1/experiment-runs/$RUN_ID/backtest-visualization?start_at=2024-01-01T00:00:00Z&end_at=2025-01-01T00:00:00Z"
+curl "$QUANT_LAB_URL/api/v1/datasets/$SNAPSHOT_ID/quality"
+```
+
+Visualization is read-only and capped at 10,000 bars. Use a bounded range for
+minute data. Execution and equity come from persisted evidence; supported
+indicators/signals are reconstructed only server-side from immutable lineage.

@@ -1,0 +1,10 @@
+meta {
+  name: Get Dataset Quality
+  type: http
+  seq: 1
+}
+get {
+  url: {{baseUrl}}/api/v1/datasets/{{snapshotId}}/quality
+  body: none
+  auth: none
+}

@@ -1,2 +1,16 @@
-meta { name: Walk-forward evidence type: http seq: 4 }
-get { url: {{baseUrl}}/api/v1/experiment-runs/{{runId}}/validations?validation_type=walk_forward body: none auth: none }
+meta {
+  name: Run walk-forward validation
+  type: http
+  seq: 4
+}
+post {
+  url: {{baseUrl}}/api/v1/experiment-runs/{{runId}}/validations/walk-forward
+  body: json
+  auth: none
+}
+body:json {
+  {"mode":"expanding","training_window":504,"test_window":126,"step":126}
+}
+script:post-response {
+  if (res.status === 201) bru.setEnvVar("walkForwardValidationId", res.body.id);
+}

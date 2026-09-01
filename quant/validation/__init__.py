@@ -37,6 +37,7 @@ from quant.validation.monte_carlo import (
     summarize_monte_carlo,
     trade_return_observations,
 )
+from quant.validation.out_of_sample import OutOfSampleConfiguration
 from quant.validation.parameter_sensitivity import (
     ParameterCandidateResult,
     ParameterCombination,
@@ -92,6 +93,7 @@ __all__ = [
     "MonteCarloConfiguration",
     "MonteCarloDistributionSummary",
     "MonteCarloPathSummary",
+    "OutOfSampleConfiguration",
     "ParameterCombination",
     "ParameterSensitivityAnalysis",
     "ParameterSensitivityConfiguration",

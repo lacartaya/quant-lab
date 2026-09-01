@@ -1,2 +1,16 @@
-meta { name: Stress evidence type: http seq: 6 }
-get { url: {{baseUrl}}/api/v1/experiment-runs/{{runId}}/validations?validation_type=stress body: none auth: none }
+meta {
+  name: Run stress validation
+  type: http
+  seq: 6
+}
+post {
+  url: {{baseUrl}}/api/v1/experiment-runs/{{runId}}/validations/stress
+  body: json
+  auth: none
+}
+body:json {
+  {"scenarios":[{"id":"fees-2x","name":"Double fees","stress_type":"fee_multiplier","configuration":{"multiplier":"2"}},{"id":"delay-1","name":"One additional bar delay","stress_type":"execution_delay","configuration":{"additional_delay_bars":1}}]}
+}
+script:post-response {
+  if (res.status === 201) bru.setEnvVar("stressValidationId", res.body.id);
+}

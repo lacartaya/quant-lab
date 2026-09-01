@@ -1,2 +1,16 @@
-meta { name: Get adversarial report type: http seq: 1 }
-get { url: {{baseUrl}}/api/v1/experiment-runs/{{runId}}/adversarial-report body: none auth: none }
+meta {
+  name: Run adversarial review
+  type: http
+  seq: 1
+}
+post {
+  url: {{baseUrl}}/api/v1/experiment-runs/{{runId}}/validations/adversarial-review
+  body: json
+  auth: none
+}
+body:json {
+  {"max_oos_sharpe_drop":0.5,"max_oos_return_drop":0.2,"max_oos_drawdown_worsening":0.1,"min_profitable_fold_ratio":0.6,"max_fold_return_dispersion":0.2,"max_fold_sharpe_dispersion":1,"max_neighbor_sharpe_delta":0.5,"min_profitable_parameter_ratio":0.6,"max_parameter_sharpe_dispersion":1,"max_stress_return_drop":0.2,"max_stress_drawdown_worsening":0.1,"max_bootstrap_loss_frequency":0.3,"max_adverse_bootstrap_drawdown":-0.25,"max_bootstrap_losing_streak":4,"max_historical_return_percentile":0.95,"min_trade_count_for_interpretation":20,"max_top_trade_profit_share":0.5,"max_top_three_profit_share":0.8}
+}
+script:post-response {
+  if (res.status === 201) bru.setEnvVar("adversarialValidationId", res.body.id);
+}

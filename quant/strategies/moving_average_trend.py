@@ -1,8 +1,16 @@
 from dataclasses import dataclass
+from datetime import datetime
 from decimal import Context, Decimal, localcontext
 from typing import ClassVar
 
 from quant.domain import HistoricalDataset, Signal, SignalAction
+
+
+@dataclass(frozen=True, slots=True)
+class MovingAveragePoint:
+    timestamp: datetime
+    short_average: Decimal
+    long_average: Decimal
 
 
 @dataclass(frozen=True, slots=True)
@@ -44,12 +52,14 @@ class MovingAverageTrendStrategy:
 
     strategy_key: ClassVar[str] = "moving_average_trend"
 
-    def generate_signals(self, dataset: HistoricalDataset) -> tuple[Signal, ...]:
+    def indicator_series(
+        self, dataset: HistoricalDataset
+    ) -> tuple[MovingAveragePoint, ...]:
         closes = tuple(bar.close for bar in dataset.bars)
         if len(closes) < self.parameters.long_window:
             return ()
 
-        signals: list[Signal] = []
+        points: list[MovingAveragePoint] = []
         with localcontext(Context(prec=64)):
             prefix_sums: list[Decimal] = [Decimal(0)]
             for close in closes:
@@ -57,18 +67,30 @@ class MovingAverageTrendStrategy:
 
             for index in range(self.parameters.long_window - 1, len(closes)):
                 count = index + 1
-                short_sum = prefix_sums[count] - prefix_sums[
-                    count - self.parameters.short_window
-                ]
-                long_sum = prefix_sums[count] - prefix_sums[
-                    count - self.parameters.long_window
-                ]
+                short_sum = (
+                    prefix_sums[count]
+                    - prefix_sums[count - self.parameters.short_window]
+                )
+                long_sum = (
+                    prefix_sums[count]
+                    - prefix_sums[count - self.parameters.long_window]
+                )
                 short_average = short_sum / Decimal(self.parameters.short_window)
                 long_average = long_sum / Decimal(self.parameters.long_window)
-                action = (
-                    SignalAction.LONG
-                    if short_average > long_average
-                    else SignalAction.FLAT
+                points.append(
+                    MovingAveragePoint(
+                        dataset.bars[index].timestamp, short_average, long_average
+                    )
                 )
-                signals.append(Signal(dataset.bars[index].timestamp, action))
-        return tuple(signals)
+        return tuple(points)
+
+    def generate_signals(self, dataset: HistoricalDataset) -> tuple[Signal, ...]:
+        return tuple(
+            Signal(
+                point.timestamp,
+                SignalAction.LONG
+                if point.short_average > point.long_average
+                else SignalAction.FLAT,
+            )
+            for point in self.indicator_series(dataset)
+        )

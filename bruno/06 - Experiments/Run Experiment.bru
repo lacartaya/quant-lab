@@ -1,5 +1,19 @@
-meta { name: Run deterministic backtest type: http seq: 2 }
-post { url: {{baseUrl}}/api/v1/experiments/{{experimentId}}/runs body: json auth: none }
-body:json { {"initial_cash":"10000","position_fraction":"1","fee":{"model":"percentage","rate":"0.001"},"slippage":{"model":"basis_points","basis_points":"10"},"periods_per_year":252,"annual_risk_free_rate":"0"} }
-script:post-response { if (res.status === 201) { bru.setEnvVar("runId", res.body.experiment_run_id); if (res.body.validation_ids.length > 0) { bru.setEnvVar("validationId", res.body.validation_ids[0]); } } }
-tests { test("run completed", function () { expect(res.status).to.equal(201); expect(res.body.status).to.equal("completed"); expect(res.body.result_fingerprint).to.exist; }); }
+meta {
+  name: Run deterministic backtest
+  type: http
+  seq: 2
+}
+post {
+  url: {{baseUrl}}/api/v1/experiments/{{experimentId}}/runs
+  body: json
+  auth: none
+}
+body:json {
+  {"initial_cash":"10000","position_fraction":"1","fee":{"model":"percentage","rate":"0.001"},"slippage":{"model":"basis_points","basis_points":"10"},"periods_per_year":252,"annual_risk_free_rate":"0"}
+}
+script:post-response {
+  if (res.status === 201) { bru.setEnvVar("runId", res.body.experiment_run_id); if (res.body.validation_ids.length > 0) { bru.setEnvVar("validationId", res.body.validation_ids[0]); } }
+}
+tests {
+  test("run completed", function () { expect(res.status).to.equal(201); expect(res.body.status).to.equal("completed"); expect(res.body.result_fingerprint).to.exist; });
+}

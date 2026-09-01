@@ -17,6 +17,12 @@ from quant.application.experiments.monte_carlo import (
     ReproduceMonteCarloValidation,
     RunMonteCarloValidation,
 )
+from quant.application.experiments.out_of_sample import (
+    OUT_OF_SAMPLE_VERSION,
+    OutOfSampleLineageError,
+    OutOfSampleValidationResult,
+    RunOutOfSampleValidation,
+)
 from quant.application.experiments.parameter_sensitivity import (
     PARAMETER_SENSITIVITY_VERSION,
     ParameterSensitivityLineageError,
@@ -68,6 +74,9 @@ __all__ = [
     "MonteCarloLineageError",
     "MonteCarloReproductionResult",
     "MonteCarloValidationResult",
+    "OUT_OF_SAMPLE_VERSION",
+    "OutOfSampleLineageError",
+    "OutOfSampleValidationResult",
     "PARAMETER_SENSITIVITY_VERSION",
     "ParameterSensitivityLineageError",
     "ParameterSensitivityReproductionResult",
@@ -80,6 +89,7 @@ __all__ = [
     "RunExperiment",
     "RunAdversarialValidation",
     "RunMonteCarloValidation",
+    "RunOutOfSampleValidation",
     "RunParameterSensitivityValidation",
     "RunStressValidation",
     "ReproduceStressValidation",

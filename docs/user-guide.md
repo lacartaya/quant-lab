@@ -66,7 +66,24 @@ Paper Arena, and research memory.
    they prevent accidental simulated writes.
 
 The dashboard never calculates authoritative metrics and never calls Alpaca
-directly. For workflows not exposed as dashboard writes, use OpenAPI `/docs`,
-the curl guide, or Bruno. Creation of complete research/validation pipelines is
-not yet exposed as a single public API workflow; persisted results remain fully
-inspectable.
+directly. Experiment detail provides explicit configuration, Run, and Copy curl
+controls for every validation stage and the deterministic gate. Successful
+execution means evidence was recorded; only a gate result means policy
+eligibility.
+## Understanding how your strategy actually traded
+
+From a completed experiment, choose **View backtest chart**. Candles show each
+period's open, high, low, and close. MA50 and MA200 are rolling average closes
+using the StrategyVersion parameters; the browser does not calculate them.
+
+A signal is known at a bar's close and can execute no earlier than the next
+bar's open. Signal and BUY/SELL fill timestamps are therefore shown separately.
+Selecting a fill or trade shows its price, quantity, IDs, realized P&L, and
+return. The LONG/FLAT track shows invested and cash periods. The equity chart
+compares the strategy with Buy & Hold under the same capital and costs.
+
+Dataset panels distinguish requested range from actual returned coverage and
+show structural diagnostics and observed bars/year. No complete exchange
+coverage is claimed because an authoritative exchange calendar is not present.
+Visual inspection does not replace OOS, walk-forward, sensitivity, stress,
+Monte Carlo, adversarial, or validation-gate evidence.

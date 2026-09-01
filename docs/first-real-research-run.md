@@ -24,3 +24,13 @@ The dashboard offers **Copy curl** beside each write action. The same executable
 sequence is committed in `bruno/Example - SPY Research/README.md`. Further
 validation evidence can be inspected through the API, but the current HTTP API
 does not yet start those application-only validation workflows.
+## Understanding how your strategy actually traded
+
+After **Run Experiment**, inspect the ExperimentRun and BACKTEST, open **View
+backtest chart**, then inspect Dataset Quality. The requested 2016-01-01 start is
+not the actual 2018-11-01 first returned SPY bar. The chart shows MA50/MA200,
+distinct signal-close and next-open fills, completed trades, LONG/FLAT periods,
+and strategy equity beside Buy & Hold.
+
+This is historical explainability. It does not make unexecuted OOS or robustness
+stages pass and does not authorize paper or live trading.

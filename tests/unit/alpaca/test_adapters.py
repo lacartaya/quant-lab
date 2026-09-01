@@ -110,6 +110,45 @@ def test_historical_provider_paginates_and_normalizes_daily_iex_bars() -> None:
     assert dataset.metadata["feed"] == "iex"
 
 
+def test_historical_provider_preserves_explicit_sip_provenance() -> None:
+    def handle(request: httpx.Request) -> httpx.Response:
+        assert request.url.params["feed"] == "sip"
+        return httpx.Response(
+            200,
+            json={
+                "bars": {
+                    "SPY": [
+                        {
+                            "t": "2024-01-02T05:00:00Z",
+                            "o": 470,
+                            "h": 472,
+                            "l": 469,
+                            "c": 471,
+                            "v": 1000,
+                        }
+                    ]
+                },
+                "next_page_token": None,
+            },
+        )
+
+    provider = AlpacaHistoricalMarketDataProvider(
+        client_for(httpx.MockTransport(handle)), "sip"
+    )
+    dataset = provider.load_historical(
+        HistoricalDataRequest(
+            "US_EQUITIES",
+            "SPY",
+            "1Day",
+            datetime(2024, 1, 1, tzinfo=UTC),
+            datetime(2024, 1, 4, tzinfo=UTC),
+            AdjustmentPolicy.RAW,
+        )
+    )
+    assert provider.name == "alpaca:sip"
+    assert dataset.metadata["feed"] == "sip"
+
+
 def test_live_provider_polls_forward_only_latest_iex_bar() -> None:
     def handle(request: httpx.Request) -> httpx.Response:
         assert request.url.params["feed"] == "iex"

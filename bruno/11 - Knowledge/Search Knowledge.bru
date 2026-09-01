@@ -1,3 +1,13 @@
-meta { name: Search rejected research memory type: http seq: 1 }
-get { url: {{baseUrl}}/api/v1/knowledge?status=rejected&limit=50 body: none auth: none }
-tests { test("searched", function () { expect(res.status).to.equal(200); }); }
+meta {
+  name: Search rejected research memory
+  type: http
+  seq: 1
+}
+get {
+  url: {{baseUrl}}/api/v1/knowledge?status=rejected&limit=50
+  body: none
+  auth: none
+}
+tests {
+  test("searched", function () { expect(res.status).to.equal(200); });
+}

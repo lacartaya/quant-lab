@@ -336,7 +336,10 @@ def test_complete_research_evidence_is_observable_over_http(
     app.dependency_overrides[get_operator_queries] = lambda: queries
     try:
         with TestClient(app) as client:
-            assert client.get("/api/v1/experiments").json()["page"]["returned"] == 1
+            listed = client.get("/api/v1/experiments").json()
+            assert str(experiment.id) in {
+                item["experiment_id"] for item in listed["items"]
+            }
             assert client.get(f"/api/v1/experiments/{experiment.id}").status_code == 200
             evidence = client.get(
                 f"/api/v1/experiment-runs/{run.id}/validations"

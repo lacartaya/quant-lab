@@ -1,4 +1,6 @@
 from dataclasses import asdict
+from datetime import datetime
+from decimal import Decimal
 from pathlib import Path
 from typing import Annotated, Any
 from uuid import UUID
@@ -13,6 +15,7 @@ from apps.api.dependencies import (
     OperatorDependency,
     PaperDependency,
     ResearchDependency,
+    ValidationDependency,
 )
 from apps.api.mappers import (
     experiment_detail,
@@ -27,40 +30,49 @@ from apps.api.mappers import (
 )
 from apps.api.schemas import (
     AddPaperParticipantRequest,
+    AdversarialRequest,
     AlpacaPaperAccountResponse,
     AlpacaPaperFillResponse,
     AlpacaPaperOrderResponse,
     AlpacaPaperPositionResponse,
+    BacktestVisualizationResponse,
     CreateExperimentRequest,
     CreateExperimentResponse,
     CreateHypothesisRequest,
     CreatePaperSessionRequest,
     CreateStrategyVersionRequest,
     DashboardSummaryResponse,
+    DatasetQualityResponse,
     DatasetSnapshotListResponse,
     DatasetSnapshotResponse,
     ExperimentDetailResponse,
     ExperimentListResponse,
     ExperimentRunResponse,
+    GateEvaluationRequest,
     GateResponse,
     HistoricalImportRequest,
     HypothesisDetailResponse,
     HypothesisListResponse,
     HypothesisResponse,
     KnowledgeListResponse,
+    MonteCarloRequest,
+    OutOfSampleRequest,
     PageMetadata,
     PaperArtifactListResponse,
     PaperParticipantResponse,
     PaperProcessingResponse,
     PaperSessionDetailResponse,
     PaperSessionResponse,
+    ParameterSensitivityRequest,
     PriorArtRequest,
     PriorArtResponse,
     RunExperimentRequest,
     RunExperimentResponse,
     StrategyVersionCreateResponse,
+    StressRequest,
     SubmitAlpacaPaperOrderRequest,
     ValidationResponse,
+    WalkForwardRequest,
 )
 from infra.alpaca import (
     AlpacaAPIError,
@@ -69,12 +81,15 @@ from infra.alpaca import (
 )
 from quant.analytics import AnalyticsConfiguration
 from quant.application import (
+    MAX_VISUALIZATION_BARS,
+    BacktestVisualizationService,
     CheckPriorArt,
     DuplicateHypothesisError,
     OperatorResourceNotFound,
     PaperArenaError,
     RejectedPriorArtError,
     UnsupportedVersionError,
+    dataset_quality,
 )
 from quant.backtest import (
     BacktestConfiguration,
@@ -88,6 +103,8 @@ from quant.backtest import (
 from quant.domain import (
     AdjustmentPolicy,
     ExperimentStatus,
+    GateRuleCode,
+    GateRuleDefinition,
     HypothesisStatus,
     PaperOrderSide,
     PaperOrderType,
@@ -95,12 +112,25 @@ from quant.domain import (
     PaperSession,
     PaperTimeInForce,
     SubmitAlpacaPaperOrder,
+    ValidationGatePolicy,
     ValidationType,
 )
 from quant.domain.knowledge import (
     KnowledgeQuery,
     PriorArtConfiguration,
     ResearchSignature,
+)
+from quant.validation import (
+    AdversarialAnalysisConfiguration,
+    MonteCarloConfiguration,
+    OutOfSampleConfiguration,
+    ParameterSensitivityConfiguration,
+    SamplingMethod,
+    StressScenario,
+    StressTestingConfiguration,
+    StressType,
+    WalkForwardConfiguration,
+    WalkForwardMode,
 )
 
 app = FastAPI(
@@ -248,6 +278,46 @@ def get_dataset(
     )
 
 
+@app.get(
+    "/api/v1/datasets/{snapshot_id}/quality",
+    response_model=DatasetQualityResponse,
+    tags=["market-data"],
+    summary="Inspect deterministic structural dataset quality",
+)
+def get_dataset_quality(
+    snapshot_id: UUID, datasets: DatasetDependency
+) -> DatasetQualityResponse:
+    snapshot = datasets.repository.get(snapshot_id)
+    if snapshot is None:
+        raise LookupError(f"dataset snapshot {snapshot_id} was not found")
+    quality = dataset_quality(snapshot_id, datasets.loader(snapshot_id).bars)
+    return DatasetQualityResponse(
+        snapshot_id=snapshot_id,
+        requested_start_at=snapshot.start_at,
+        requested_end_at=snapshot.end_at,
+        actual_start_at=quality.actual_start_at,
+        actual_end_at=quality.actual_end_at,
+        total_bars=quality.total_bars,
+        duplicate_timestamps=quality.duplicate_timestamps,
+        non_monotonic_timestamps=quality.non_monotonic_timestamps,
+        ordering_valid=quality.ordering_valid,
+        ordering_failure_examples=[
+            dict(item) for item in quality.ordering_failure_examples
+        ],
+        ohlc_validity_failures=quality.ohlc_validity_failures,
+        missing_ohlcv_values=quality.missing_ohlcv_values,
+        ohlcv_integrity_valid=quality.ohlcv_integrity_valid,
+        ohlcv_failure_examples=[dict(item) for item in quality.ohlcv_failure_examples],
+        bars_by_calendar_year=dict(quality.bars_by_calendar_year),
+        exchange_calendar_verified=False,
+        completeness_note=(
+            "Observed bars by calendar year only; coverage was not verified against "
+            "an authoritative exchange calendar."
+        ),
+        has_structural_errors=quality.has_structural_errors,
+    )
+
+
 @app.post(
     "/api/v1/market-data/import",
     response_model=DatasetSnapshotResponse,
@@ -260,9 +330,12 @@ def import_market_data(
 ) -> DatasetSnapshotResponse:
     if request.provider.upper() != "ALPACA":
         raise ValueError("the HTTP import workflow currently supports ALPACA only")
-    if request.feed.lower() != "iex":
-        raise ValueError("Alpaca Basic import requires the IEX feed")
-    result = alpaca.historical_import.execute(
+    importer = (
+        alpaca.historical_import_for_feed(request.feed)
+        if alpaca.historical_import_for_feed is not None
+        else alpaca.historical_import
+    )
+    result = importer.execute(
         market=request.market,
         instrument=request.instrument,
         timeframe=request.timeframe,
@@ -415,6 +488,31 @@ def get_run(run_id: UUID, queries: OperatorDependency) -> ExperimentRunResponse:
 
 
 @app.get(
+    "/api/v1/experiment-runs/{run_id}/backtest-visualization",
+    response_model=BacktestVisualizationResponse,
+    tags=["experiments"],
+    summary="Read bounded persisted BACKTEST visualization evidence",
+)
+def get_backtest_visualization(
+    run_id: UUID,
+    queries: OperatorDependency,
+    datasets: DatasetDependency,
+    start_at: datetime | None = None,
+    end_at: datetime | None = None,
+    maximum_bars: Annotated[
+        int, Query(ge=1, le=MAX_VISUALIZATION_BARS)
+    ] = MAX_VISUALIZATION_BARS,
+) -> BacktestVisualizationResponse:
+    payload = BacktestVisualizationService(
+        experiments=queries.experiments,
+        strategies=queries.strategies,
+        datasets=queries.datasets,
+        dataset_loader=datasets.loader,
+    ).build(run_id, start_at=start_at, end_at=end_at, maximum_bars=maximum_bars)
+    return BacktestVisualizationResponse.model_validate(json_value(payload))
+
+
+@app.get(
     "/api/v1/experiment-runs/{run_id}/validations",
     response_model=list[ValidationResponse],
     tags=["validations"],
@@ -436,6 +534,182 @@ def get_validation(
     validation_id: UUID, queries: OperatorDependency
 ) -> ValidationResponse:
     return validation(queries.validation(validation_id))
+
+
+def _created_validation(
+    services: ValidationDependency, validation_id: UUID
+) -> ValidationResponse:
+    created = services.experiments.get_validation(validation_id)
+    if created is None:
+        raise RuntimeError("created validation evidence is unavailable")
+    return validation(created)
+
+
+@app.post(
+    "/api/v1/experiment-runs/{run_id}/validations/out-of-sample",
+    response_model=ValidationResponse,
+    status_code=201,
+    tags=["validations"],
+)
+def run_out_of_sample(
+    run_id: UUID, request: OutOfSampleRequest, services: ValidationDependency
+) -> ValidationResponse:
+    result = services.out_of_sample.execute(
+        run_id, OutOfSampleConfiguration(**request.model_dump())
+    )
+    return _created_validation(services, result.validation_run_id)
+
+
+@app.post(
+    "/api/v1/experiment-runs/{run_id}/validations/walk-forward",
+    response_model=ValidationResponse,
+    status_code=201,
+    tags=["validations"],
+)
+def run_walk_forward(
+    run_id: UUID, request: WalkForwardRequest, services: ValidationDependency
+) -> ValidationResponse:
+    result = services.walk_forward.execute(
+        run_id,
+        WalkForwardConfiguration(
+            WalkForwardMode(request.mode),
+            request.training_window,
+            request.test_window,
+            request.step,
+        ),
+    )
+    return _created_validation(services, result.validation_run_id)
+
+
+@app.post(
+    "/api/v1/experiment-runs/{run_id}/validations/parameter-sensitivity",
+    response_model=ValidationResponse,
+    status_code=201,
+    tags=["validations"],
+)
+def run_parameter_sensitivity(
+    run_id: UUID,
+    request: ParameterSensitivityRequest,
+    services: ValidationDependency,
+) -> ValidationResponse:
+    result = services.sensitivity.execute(
+        run_id,
+        ParameterSensitivityConfiguration(
+            {name: tuple(values) for name, values in request.parameters.items()},
+            request.maximum_combinations,
+        ),
+    )
+    return _created_validation(services, result.validation_run_id)
+
+
+@app.post(
+    "/api/v1/experiment-runs/{run_id}/validations/stress",
+    response_model=ValidationResponse,
+    status_code=201,
+    tags=["validations"],
+)
+def run_stress(
+    run_id: UUID, request: StressRequest, services: ValidationDependency
+) -> ValidationResponse:
+    scenarios = tuple(
+        StressScenario(
+            item.id,
+            item.name,
+            StressType(item.stress_type),
+            _stress_configuration(StressType(item.stress_type), item.configuration),
+        )
+        for item in request.scenarios
+    )
+    result = services.stress.execute(run_id, StressTestingConfiguration(scenarios))
+    return _created_validation(services, result.validation_run_id)
+
+
+def _stress_configuration(
+    stress_type: StressType, configuration: dict[str, Any]
+) -> dict[str, Any]:
+    normalized = dict(configuration)
+    decimal_field = {
+        StressType.FEE_MULTIPLIER: "multiplier",
+        StressType.SLIPPAGE_MULTIPLIER: "multiplier",
+        StressType.ADVERSE_PRICE: "additional_basis_points",
+    }.get(stress_type)
+    if decimal_field is not None and decimal_field in normalized:
+        normalized[decimal_field] = Decimal(str(normalized[decimal_field]))
+    return normalized
+
+
+@app.post(
+    "/api/v1/experiment-runs/{run_id}/validations/monte-carlo",
+    response_model=ValidationResponse,
+    status_code=201,
+    tags=["validations"],
+)
+def run_monte_carlo(
+    run_id: UUID, request: MonteCarloRequest, services: ValidationDependency
+) -> ValidationResponse:
+    result = services.monte_carlo.execute(
+        run_id,
+        MonteCarloConfiguration(
+            request.simulation_count,
+            request.random_seed,
+            tuple(request.confidence_percentiles),
+            SamplingMethod(request.sampling_method),
+            request.drawdown_threshold,
+            request.ruin_equity_fraction,
+        ),
+    )
+    return _created_validation(services, result.validation_run_id)
+
+
+@app.post(
+    "/api/v1/experiment-runs/{run_id}/validations/adversarial-review",
+    response_model=ValidationResponse,
+    status_code=201,
+    tags=["validations"],
+)
+def run_adversarial_review(
+    run_id: UUID, request: AdversarialRequest, services: ValidationDependency
+) -> ValidationResponse:
+    before = {item.id for item in services.experiments.list_validations(run_id)}
+    services.adversarial.execute(
+        run_id, AdversarialAnalysisConfiguration(**request.model_dump())
+    )
+    created = [
+        item
+        for item in services.experiments.list_validations(run_id)
+        if item.id not in before
+        and item.validation_type is ValidationType.ADVERSARIAL_REVIEW
+    ]
+    if len(created) != 1:
+        raise RuntimeError("created adversarial evidence is unavailable")
+    return validation(created[0])
+
+
+@app.post(
+    "/api/v1/experiment-runs/{run_id}/gate-evaluations",
+    response_model=GateResponse,
+    status_code=201,
+    tags=["gates"],
+)
+def evaluate_gate(
+    run_id: UUID, request: GateEvaluationRequest, services: ValidationDependency
+) -> GateResponse:
+    policy = ValidationGatePolicy(
+        request.policy_id,
+        request.policy_version,
+        request.policy_name,
+        tuple(ValidationType(value) for value in request.required_validations),
+        request.require_adversarial_report,
+        tuple(
+            GateRuleDefinition(GateRuleCode(item.code), item.threshold)
+            for item in request.rules
+        ),
+    )
+    evidence = {
+        ValidationType(name): identity
+        for name, identity in request.evidence_ids.items()
+    }
+    return gate(services.gate.execute(run_id, policy, evidence))
 
 
 @app.get(

@@ -1,0 +1,18 @@
+{
+  "title": "SPY Daily Moving Average Trend 50/200",
+  "description": "Evaluate whether a long-flat moving average trend strategy using 50-day and 200-day moving averages shows robust historical performance on SPY daily data.",
+  "rationale": "The 50/200 moving average crossover is a widely known trend-following approach. This experiment tests whether it produces useful risk-adjusted behavior on the available SPY dataset under Quant Lab execution semantics.",
+  "strategy_family": "moving_average_trend",
+  "market": "US_EQUITIES",
+  "instrument": "SPY",
+  "timeframe": "1Day",
+  "parameters": {
+    "short_window": 50,
+    "long_window": 200
+  },
+  "expected_benefit": "Capture medium-to-long-term upward trends while reducing exposure during prolonged bearish periods.",
+  "expected_tradeoff": "The strategy may react slowly to regime changes, miss part of strong recoveries, and suffer whipsaw losses during sideways markets.",
+  "success_criteria": "The strategy should demonstrate competitive risk-adjusted performance versus buy-and-hold with acceptable drawdown and sufficient trade history to justify further validation.",
+  "rejection_criteria": "Reject the hypothesis if the strategy materially underperforms the benchmark on risk-adjusted return, exhibits unacceptable drawdown, or shows evidence that performance depends excessively on a narrow historical period.",
+  "reconsideration_conditions": "Reconsider if materially more historical data becomes available, execution assumptions change, or later parameter-sensitivity evidence suggests a more robust neighboring configuration."
+}

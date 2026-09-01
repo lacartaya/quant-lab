@@ -1,4 +1,6 @@
+from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import datetime
 from uuid import UUID
 
 from quant.domain import (
@@ -6,6 +8,7 @@ from quant.domain import (
     Experiment,
     ExperimentRun,
     ExperimentStatus,
+    HistoricalDataset,
     Hypothesis,
     HypothesisStatus,
     Strategy,
@@ -45,6 +48,9 @@ class ExperimentDetail:
     strategy_version: StrategyVersion
     dataset: DatasetSnapshot
     runs: tuple[ExperimentRun, ...]
+    dataset_actual_start_at: datetime | None = None
+    dataset_actual_end_at: datetime | None = None
+    dataset_bar_count: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -75,6 +81,7 @@ class OperatorQueries:
     experiments: ExperimentRepository
     gates: GateRepository
     knowledge: KnowledgeRepository
+    dataset_loader: Callable[[UUID], HistoricalDataset] | None = None
 
     def list_datasets(
         self, *, limit: int = 50, offset: int = 0
@@ -135,6 +142,15 @@ class OperatorQueries:
             "dataset snapshot",
             experiment.dataset_snapshot_id,
         )
+        actual_start = actual_end = None
+        bar_count = None
+        if self.dataset_loader is not None:
+            loaded = self.dataset_loader(dataset.id)
+            bars = getattr(loaded, "bars", ())
+            if bars:
+                actual_start = bars[0].timestamp
+                actual_end = bars[-1].timestamp
+                bar_count = len(bars)
         return ExperimentDetail(
             experiment,
             hypothesis,
@@ -142,6 +158,9 @@ class OperatorQueries:
             version,
             dataset,
             tuple(self.experiments.list_runs(experiment.id)),
+            actual_start,
+            actual_end,
+            bar_count,
         )
 
     def experiment_run(self, run_id: UUID) -> ExperimentRun:

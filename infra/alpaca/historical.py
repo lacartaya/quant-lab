@@ -10,13 +10,16 @@ from quant.domain import HistoricalDataRequest, HistoricalDataset, MarketBar
 class AlpacaHistoricalMarketDataProvider:
     # DatasetSnapshot deliberately remains vendor-neutral. The immutable provider
     # identity carries the selected feed so the material provenance is retained.
-    name = "alpaca:iex"
-
     def __init__(self, client: AlpacaHTTPClient, feed: str = "iex") -> None:
-        if feed.lower() != "iex":
-            raise ValueError("only Alpaca IEX feed is supported")
+        normalized_feed = feed.lower()
+        if normalized_feed not in {"iex", "sip"}:
+            raise ValueError("Alpaca historical feed must be IEX or SIP")
         self._client = client
-        self.feed = "iex"
+        self.feed = normalized_feed
+
+    @property
+    def name(self) -> str:
+        return f"alpaca:{self.feed}"
 
     def load_historical(self, request: HistoricalDataRequest) -> HistoricalDataset:
         if request.market != "US_EQUITIES":

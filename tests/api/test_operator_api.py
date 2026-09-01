@@ -128,8 +128,39 @@ def fixture() -> tuple[Mock, FixtureValues]:
         "percentage-fee-v1",
         "bps-slippage-v1",
         {
-            "analytics": {"version": "metrics-v1"},
-            "result_fingerprint": "run-fingerprint",
+            "execution": {
+                "engine_version": "backtest-engine-v1",
+                "backtest": {"initial_cash": "10000", "position_fraction": "1"},
+                "fee": {"version": "zero-fee-v1"},
+                "slippage": {"version": "zero-slippage-v1"},
+                "analytics": {
+                    "version": "metrics-v1",
+                    "periods_per_year": 252,
+                    "annual_risk_free_rate": "0",
+                },
+                "benchmark": "BUY_AND_HOLD",
+            },
+            "evidence": {
+                "lineage": {
+                    "strategy_version_id": str(version.id),
+                    "dataset_snapshot_id": str(dataset.id),
+                    "execution_configuration": {
+                        "backtest": {"initial_cash": "10000", "position_fraction": "1"},
+                        "fee": {"version": "zero-fee-v1"},
+                        "slippage": {"version": "zero-slippage-v1"},
+                    },
+                },
+                "backtest": {
+                    "orders": [],
+                    "fills": [],
+                    "trades": [],
+                    "equity_curve": [{"timestamp": NOW.isoformat(), "equity": "10000"}],
+                },
+                "benchmark_backtest": {
+                    "equity_curve": [{"timestamp": NOW.isoformat(), "equity": "10000"}]
+                },
+            },
+            "fingerprint": "run-fingerprint",
         },
         NOW,
         NOW + timedelta(minutes=1),
@@ -223,7 +254,15 @@ def fixture() -> tuple[Mock, FixtureValues]:
         ),
     )
     queries.experiment_detail.return_value = ExperimentDetail(
-        experiment, hypothesis, strategy, version, dataset, (run,)
+        experiment,
+        hypothesis,
+        strategy,
+        version,
+        dataset,
+        (run,),
+        dataset.start_at + timedelta(days=1),
+        dataset.start_at + timedelta(days=1),
+        1,
     )
     queries.experiment_run.return_value = run
     queries.validations.return_value = (validation, adversarial)
@@ -255,6 +294,17 @@ def fixture() -> tuple[Mock, FixtureValues]:
     knowledge_repository = Mock()
     knowledge_repository.list_all.return_value = [record]
     queries.knowledge = knowledge_repository
+    experiment_repository = Mock()
+    experiment_repository.get_run.return_value = run
+    experiment_repository.get.return_value = experiment
+    experiment_repository.list_validations.return_value = (validation, adversarial)
+    strategy_repository = Mock()
+    strategy_repository.get_version.return_value = version
+    dataset_repository = Mock()
+    dataset_repository.get.return_value = dataset
+    queries.experiments = experiment_repository
+    queries.strategies = strategy_repository
+    queries.datasets = dataset_repository
     return queries, {
         "hypothesis": hypothesis,
         "version": version,
@@ -429,6 +479,29 @@ def client_for(queries: Mock) -> TestClient:
     app.dependency_overrides[get_operator_queries] = lambda: cast(
         OperatorQueries, queries
     )
+    snapshot = queries.list_datasets.return_value[0]
+    loaded = HistoricalDataset.from_bars(
+        market=snapshot.market,
+        instrument=snapshot.instrument,
+        timeframe=snapshot.timeframe,
+        adjustment_policy=snapshot.adjustment_policy,
+        bars=(
+            MarketBar(
+                snapshot.start_at + timedelta(days=1),
+                Decimal("100"),
+                Decimal("101"),
+                Decimal("99"),
+                Decimal("100"),
+                Decimal("1000"),
+            ),
+        ),
+    )
+    repository = Mock()
+    repository.get.return_value = snapshot
+    repository.list_all.return_value = [snapshot]
+    app.dependency_overrides[get_dataset_services] = lambda: DatasetServices(
+        repository, lambda _: loaded
+    )
     return TestClient(app)
 
 
@@ -441,6 +514,12 @@ def test_health_and_dashboard_smoke() -> None:
         assert "Quant Lab" in dashboard.text
         assert "Paper Arena" in dashboard.text
         assert "Market Data / Datasets" in dashboard.text
+        assert "lightweight-charts.standalone.production.js" in dashboard.text
+        script = client.get("/dashboard/app.js")
+        assert script.status_code == 200
+        assert 'money(value, " / trade")' in script.text
+        assert "createSeriesMarkers" in script.text
+        assert "View backtest chart" in script.text
         assert "PAPER / SIMULATED" in dashboard.text
         assert "View / copy curl" in dashboard.text
         assert "New SPY 50/200 research" in dashboard.text
@@ -468,6 +547,11 @@ def test_experiment_run_validation_adversarial_and_gate_endpoints() -> None:
         assert listing["items"][0]["experiment_id"] == str(values["experiment"].id)
         detail = client.get(f"/api/v1/experiments/{values['experiment'].id}").json()
         assert detail["dataset_snapshot"]["checksum"] == "sha256-fixture"
+        assert detail["dataset_snapshot"]["bar_count"] == 1
+        assert (
+            detail["dataset_snapshot"]["requested_start_at"]
+            != detail["dataset_snapshot"]["actual_start_at"]
+        )
         assert "storage_location" not in detail["dataset_snapshot"]
         run = client.get(f"/api/v1/experiment-runs/{values['run'].id}").json()
         assert run["analytics_version"] == "metrics-v1"
@@ -498,6 +582,45 @@ def test_experiment_run_validation_adversarial_and_gate_endpoints() -> None:
             == 200
         )
     app.dependency_overrides.clear()
+
+
+def test_backtest_visualization_and_dataset_quality_endpoints() -> None:
+    queries, values = fixture()
+    with client_for(queries) as client:
+        visualization = client.get(
+            f"/api/v1/experiment-runs/{values['run'].id}/backtest-visualization"
+        )
+        assert visualization.status_code == 200
+        payload = visualization.json()
+        assert payload["dataset_snapshot_id"] == str(IDS[3])
+        assert payload["strategy_version_id"] == str(values["version"].id)
+        assert payload["returned_bar_count"] == 1
+        assert payload["trades"] == []
+        quality = client.get(f"/api/v1/datasets/{IDS[3]}/quality")
+        assert quality.status_code == 200
+        assert quality.json()["exchange_calendar_verified"] is False
+        assert quality.json()["ordering_valid"] is True
+        assert quality.json()["ohlcv_integrity_valid"] is True
+        queries.experiments.get_run.return_value = None
+        missing = client.get(
+            f"/api/v1/experiment-runs/{UUID(int=999)}/backtest-visualization"
+        )
+        assert missing.status_code == 404
+    app.dependency_overrides.clear()
+
+
+def test_openapi_exposes_complete_research_execution_lifecycle() -> None:
+    paths = app.openapi()["paths"]
+    expected_posts = (
+        "/api/v1/experiment-runs/{run_id}/validations/out-of-sample",
+        "/api/v1/experiment-runs/{run_id}/validations/walk-forward",
+        "/api/v1/experiment-runs/{run_id}/validations/parameter-sensitivity",
+        "/api/v1/experiment-runs/{run_id}/validations/stress",
+        "/api/v1/experiment-runs/{run_id}/validations/monte-carlo",
+        "/api/v1/experiment-runs/{run_id}/validations/adversarial-review",
+        "/api/v1/experiment-runs/{run_id}/gate-evaluations",
+    )
+    assert all("post" in paths[path] for path in expected_posts)
 
 
 def test_hypothesis_knowledge_strategy_prior_art_and_summary_endpoints() -> None:

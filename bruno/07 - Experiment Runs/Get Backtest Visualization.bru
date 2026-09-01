@@ -1,0 +1,10 @@
+meta {
+  name: Get Backtest Visualization
+  type: http
+  seq: 2
+}
+get {
+  url: {{baseUrl}}/api/v1/experiment-runs/{{runId}}/backtest-visualization
+  body: none
+  auth: none
+}

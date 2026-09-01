@@ -1,2 +1,16 @@
-meta { name: Monte Carlo bootstrap evidence type: http seq: 7 }
-get { url: {{baseUrl}}/api/v1/experiment-runs/{{runId}}/validations?validation_type=monte_carlo body: none auth: none }
+meta {
+  name: Run Monte Carlo bootstrap
+  type: http
+  seq: 7
+}
+post {
+  url: {{baseUrl}}/api/v1/experiment-runs/{{runId}}/validations/monte-carlo
+  body: json
+  auth: none
+}
+body:json {
+  {"simulation_count":1000,"random_seed":20260831,"confidence_percentiles":[0.05,0.5,0.95],"sampling_method":"trade_bootstrap","drawdown_threshold":-0.25,"ruin_equity_fraction":0.5}
+}
+script:post-response {
+  if (res.status === 201) bru.setEnvVar("monteCarloValidationId", res.body.id);
+}
